@@ -1,3 +1,4 @@
+# session.py
 from collections.abc import AsyncGenerator
 from urllib.parse import urlparse, urlunparse
 
@@ -19,7 +20,7 @@ _ASYNC_PG_STRIP = {
 
 
 def _normalize_database_url(url: str) -> tuple[str, dict]:
-    """Strip libpq query params asyncpg rejects; enable SSL for Neon."""
+    """Strip libpq query params asyncpg rejects; enable SSL for Neon and enforce asyncpg prefix."""
     connect_args: dict = {}
     if not url:
         return url, connect_args
@@ -51,8 +52,13 @@ def _normalize_database_url(url: str) -> tuple[str, dict]:
     else:
         new_query = ""
 
+    # 💡 FIX: Force the asyncpg driver protocol prefix if it is standard postgresql/postgres
+    scheme = parsed.scheme
+    if scheme in ("postgresql", "postgres"):
+        scheme = "postgresql+asyncpg"
+
     clean_url = urlunparse(
-        (parsed.scheme, parsed.netloc, parsed.path, parsed.params, new_query, parsed.fragment)
+        (scheme, parsed.netloc, parsed.path, parsed.params, new_query, parsed.fragment)
     )
     return clean_url, connect_args
 
