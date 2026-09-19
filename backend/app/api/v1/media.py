@@ -3,9 +3,9 @@ from datetime import datetime
 from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import select
 
-from app.api.deps import AdminUser, CurrentUser, DbSession, LeaderUser
+from app.api.deps import DbSession, LeaderUser
 from app.models.media import MediaItem, Series
-from app.schemas.media import MediaCreate, MediaOut, SeriesCreate, SeriesOut
+from app.schemas.media import MediaItemCreate, MediaItemOut, SeriesCreate, SeriesOut
 
 router = APIRouter(prefix="/media", tags=["media"])
 
@@ -20,13 +20,16 @@ async def create_series(payload: SeriesCreate, db: DbSession, _: LeaderUser):
 
 
 @router.get("/series", response_model=list[SeriesOut])
-async def list_series(db: DbSession):
-    result = await db.execute(select(Series).order_by(Series.created_at.desc()))
+async def list_series(db: DbSession, published_only: bool = True):
+    query = select(Series)
+    if published_only:
+        query = query.where(Series.is_published == True)  # noqa: E712
+    result = await db.execute(query.order_by(Series.created_at.desc()))
     return result.scalars().all()
 
 
-@router.post("/items", response_model=MediaOut, status_code=status.HTTP_201_CREATED)
-async def create_media_item(payload: MediaCreate, db: DbSession, _: LeaderUser):
+@router.post("/items", response_model=MediaItemOut, status_code=status.HTTP_201_CREATED)
+async def create_media_item(payload: MediaItemCreate, db: DbSession, _: LeaderUser):
     data = payload.model_dump()
     if data.get("is_published"):
         data["published_at"] = datetime.utcnow()
@@ -37,7 +40,7 @@ async def create_media_item(payload: MediaCreate, db: DbSession, _: LeaderUser):
     return item
 
 
-@router.get("/items", response_model=list[MediaOut])
+@router.get("/items", response_model=list[MediaItemOut])
 async def list_media_items(
     db: DbSession,
     media_type: str | None = None,
@@ -59,7 +62,7 @@ async def list_media_items(
     return result.scalars().all()
 
 
-@router.get("/items/{item_id}", response_model=MediaOut)
+@router.get("/items/{item_id}", response_model=MediaItemOut)
 async def get_media_item(item_id: int, db: DbSession):
     result = await db.execute(select(MediaItem).where(MediaItem.id == item_id))
     item = result.scalar_one_or_none()
@@ -70,7 +73,7 @@ async def get_media_item(item_id: int, db: DbSession):
     return item
 
 
-@router.patch("/items/{item_id}/publish", response_model=MediaOut)
+@router.patch("/items/{item_id}/publish", response_model=MediaItemOut)
 async def publish_media_item(item_id: int, db: DbSession, _: LeaderUser):
     result = await db.execute(select(MediaItem).where(MediaItem.id == item_id))
     item = result.scalar_one_or_none()

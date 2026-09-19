@@ -4,7 +4,7 @@ from datetime import datetime
 from fastapi import APIRouter, status
 from sqlalchemy import select
 
-from app.api.deps import AdminUser, OptionalUser, DbSession, LeaderUser
+from app.api.deps import AdminUser, DbSession, LeaderUser
 from app.models.notification import NotificationLog, PushDevice
 from app.models.user import User
 from app.schemas.notification import (
@@ -28,11 +28,7 @@ async def vapid_public_key():
 
 
 @router.post("/devices", response_model=DeviceOut, status_code=status.HTTP_201_CREATED)
-async def register_device(
-    payload: DeviceRegister,
-    db: DbSession,
-    current_user: OptionalUser,
-):
+async def register_device(payload: DeviceRegister, db: DbSession):
     result = await db.execute(select(PushDevice).where(PushDevice.token == payload.token))
     device = result.scalar_one_or_none()
     if device:
@@ -40,14 +36,12 @@ async def register_device(
         device.platform = payload.platform
         device.device_name = payload.device_name
         device.last_used_at = datetime.utcnow()
-        if current_user:
-            device.user_id = current_user.id
     else:
         device = PushDevice(
             token=payload.token,
             platform=payload.platform,
             device_name=payload.device_name,
-            user_id=current_user.id if current_user else None,
+            user_id=None,
             is_active=True,
             last_used_at=datetime.utcnow(),
         )

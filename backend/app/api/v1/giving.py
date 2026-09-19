@@ -2,7 +2,7 @@ import stripe
 from fastapi import APIRouter, HTTPException, Request, status
 from sqlalchemy import select
 
-from app.api.deps import CurrentUser, OptionalUser, DbSession, AdminUser
+from app.api.deps import CurrentUser, DbSession, AdminUser
 from app.core.config import get_settings
 from app.models.giving import Donation, RecurringDonation
 from app.schemas.giving import (
@@ -19,39 +19,29 @@ if settings.STRIPE_SECRET_KEY:
 
 
 @router.post("/intent", response_model=DonationIntentResponse)
-async def create_donation_intent(
-    payload: DonationCreate,
-    db: DbSession,
-    current_user: OptionalUser,
-):
+async def create_donation_intent(payload: DonationCreate, db: DbSession):
     if not settings.STRIPE_SECRET_KEY:
         raise HTTPException(status_code=503, detail="Stripe is not configured")
     try:
         intent = stripe.PaymentIntent.create(
             amount=payload.amount_cents,
             currency="usd",
-            metadata={
-                "fund": payload.fund,
-                "user_id": str(current_user.id) if current_user else "",
-            },
+            metadata={"fund": payload.fund},
             automatic_payment_methods={"enabled": True},
-            receipt_email=payload.donor_email
-            or (current_user.email if current_user else None),
+            receipt_email=payload.donor_email,
         )
     except stripe.error.StripeError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
     donation = Donation(
-        user_id=current_user.id if current_user else None,
+        user_id=None,
         amount_cents=payload.amount_cents,
         fund=payload.fund,
         stripe_payment_intent_id=intent.id,
         status="pending",
         is_recurring=payload.is_recurring,
-        donor_email=payload.donor_email
-        or (current_user.email if current_user else None),
-        donor_name=payload.donor_name
-        or (current_user.full_name if current_user else None),
+        donor_email=payload.donor_email,
+        donor_name=payload.donor_name,
     )
     db.add(donation)
     await db.flush()
