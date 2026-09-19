@@ -4,7 +4,7 @@ from datetime import datetime
 from fastapi import APIRouter, status
 from sqlalchemy import select
 
-from app.api.deps import AdminUser, CurrentUser, DbSession, LeaderUser
+from app.api.deps import AdminUser, OptionalUser, DbSession, LeaderUser
 from app.models.notification import NotificationLog, PushDevice
 from app.models.user import User
 from app.schemas.notification import (
@@ -28,7 +28,11 @@ async def vapid_public_key():
 
 
 @router.post("/devices", response_model=DeviceOut, status_code=status.HTTP_201_CREATED)
-async def register_device(payload: DeviceRegister, db: DbSession, current_user: CurrentUser | None = None):
+async def register_device(
+    payload: DeviceRegister,
+    db: DbSession,
+    current_user: OptionalUser,
+):
     result = await db.execute(select(PushDevice).where(PushDevice.token == payload.token))
     device = result.scalar_one_or_none()
     if device:
@@ -64,21 +68,29 @@ async def unregister_device(payload: DeviceRegister, db: DbSession):
 
 
 @router.post("/send", response_model=SendNotificationResponse)
-async def send_notification(payload: SendNotificationRequest, db: DbSession, current_user: LeaderUser):
+async def send_notification(
+    payload: SendNotificationRequest, db: DbSession, current_user: LeaderUser
+):
     query = select(PushDevice).where(PushDevice.is_active == True)  # noqa: E712
     if payload.target == "user" and payload.target_value:
         query = query.where(PushDevice.user_id == int(payload.target_value))
     elif payload.target == "role" and payload.target_value:
         user_ids_q = await db.execute(
-            select(User.id).where(User.role == payload.target_value, User.is_active == True)  # noqa: E712
+            select(User.id).where(
+                User.role == payload.target_value, User.is_active == True  # noqa: E712
+            )
         )
         user_ids = [r[0] for r in user_ids_q.all()]
         if not user_ids:
-            return SendNotificationResponse(sent=0, failed=0, log_id=0, errors=["No users with that role"])
+            return SendNotificationResponse(
+                sent=0, failed=0, log_id=0, errors=["No users with that role"]
+            )
         query = query.where(PushDevice.user_id.in_(user_ids))
     result = await db.execute(query)
     tokens = [d.token for d in result.scalars().all()]
-    send_result = await push_service.notify_devices(tokens, payload.title, payload.body, payload.data)
+    send_result = await push_service.notify_devices(
+        tokens, payload.title, payload.body, payload.data
+    )
     for gone in send_result.get("gone_tokens") or []:
         gone_q = await db.execute(select(PushDevice).where(PushDevice.token == gone))
         gone_dev = gone_q.scalar_one_or_none()
