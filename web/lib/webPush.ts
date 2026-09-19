@@ -2,7 +2,7 @@
 
 import { apiFetch, API_URL } from "./api";
 
-function urlBase64ToUint8Array(base64String: string): Uint8Array {
+function urlBase64ToUint8Array(base64String: string): BufferSource {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
   const raw = atob(base64);
@@ -68,7 +68,7 @@ export async function subscribeWebPush(): Promise<{ ok: boolean; error?: string 
   if (!subscription) {
     subscription = await reg.pushManager.subscribe({
       userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(vapidKey),
+      applicationServerKey: urlBase64ToUint8Array(vapidKey) as BufferSource,
     });
   }
 
