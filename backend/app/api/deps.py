@@ -11,6 +11,10 @@ from app.db.session import get_db
 from app.models.user import User
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
+oauth2_scheme_optional = OAuth2PasswordBearer(
+    tokenUrl="/api/v1/auth/login",
+    auto_error=False,
+)
 
 DbSession = Annotated[AsyncSession, Depends(get_db)]
 TokenDep = Annotated[str, Depends(oauth2_scheme)]
@@ -34,6 +38,25 @@ async def get_current_user(db: DbSession, token: TokenDep) -> User:
 
 
 CurrentUser = Annotated[User, Depends(get_current_user)]
+
+
+async def get_current_user_optional(
+    db: DbSession,
+    token: Annotated[str | None, Depends(oauth2_scheme_optional)] = None,
+) -> User | None:
+    if not token:
+        return None
+    user_id = verify_token(token, expected_type="access")
+    if not user_id:
+        return None
+    result = await db.execute(select(User).where(User.id == int(user_id)))
+    user = result.scalar_one_or_none()
+    if not user or not user.is_active:
+        return None
+    return user
+
+
+OptionalUser = Annotated[User | None, Depends(get_current_user_optional)]
 
 
 def require_roles(*roles: str) -> Callable:
