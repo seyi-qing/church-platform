@@ -1,5 +1,5 @@
 from collections.abc import AsyncGenerator
-from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
+from urllib.parse import urlparse, urlunparse
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
@@ -7,28 +7,50 @@ from app.core.config import get_settings
 
 settings = get_settings()
 
+# Params Neon/libpq put in the URL that asyncpg does not accept
+_ASYNC_PG_STRIP = {
+    "sslmode",
+    "ssl",
+    "channel_binding",
+    "options",
+    "gssencmode",
+    "target_session_attrs",
+}
+
 
 def _normalize_database_url(url: str) -> tuple[str, dict]:
-    """asyncpg rejects libpq sslmode=; convert for Neon/cloud Postgres."""
+    """Strip libpq query params asyncpg rejects; enable SSL for Neon."""
     connect_args: dict = {}
     if not url:
         return url, connect_args
 
     parsed = urlparse(url)
-    qs = parse_qs(parsed.query)
+    host = parsed.hostname or ""
 
-    sslmode = None
-    if "sslmode" in qs:
-        sslmode = qs.pop("sslmode")[0]
-    if "ssl" in qs:
-        sslmode = qs.pop("ssl")[0]
-
-    if sslmode in ("require", "verify-full", "verify-ca", "true", "1") or "neon.tech" in (
-        parsed.hostname or ""
-    ):
+    # Always use TLS for Neon
+    if "neon.tech" in host:
         connect_args["ssl"] = True
 
-    new_query = urlencode({k: v[0] for k, v in qs.items()})
+    # Drop unsupported query string entirely (safest for asyncpg)
+    if parsed.query:
+        from urllib.parse import parse_qs, urlencode
+
+        qs = parse_qs(parsed.query)
+        for key in list(qs.keys()):
+            if key.lower() in _ASYNC_PG_STRIP:
+                if key.lower() in ("sslmode", "ssl") and qs[key][0] in (
+                    "require",
+                    "verify-full",
+                    "verify-ca",
+                    "true",
+                    "1",
+                ):
+                    connect_args["ssl"] = True
+                qs.pop(key)
+        new_query = urlencode({k: v[0] for k, v in qs.items()})
+    else:
+        new_query = ""
+
     clean_url = urlunparse(
         (parsed.scheme, parsed.netloc, parsed.path, parsed.params, new_query, parsed.fragment)
     )
