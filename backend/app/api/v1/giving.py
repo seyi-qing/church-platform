@@ -22,7 +22,7 @@ if settings.STRIPE_SECRET_KEY:
 async def create_donation_intent(
     payload: DonationCreate,
     db: DbSession,
-    current_user: OptionalUser = None,
+    current_user: OptionalUser,
 ):
     if not settings.STRIPE_SECRET_KEY:
         raise HTTPException(status_code=503, detail="Stripe is not configured")
@@ -100,7 +100,9 @@ async def create_recurring_checkout(
 ):
     if not settings.STRIPE_SECRET_KEY:
         raise HTTPException(status_code=503, detail="Stripe is not configured")
-    interval = payload.interval if payload.interval in ("week", "month", "year") else "month"
+    interval = (
+        payload.interval if payload.interval in ("week", "month", "year") else "month"
+    )
     try:
         price = stripe.Price.create(
             unit_amount=payload.amount_cents,
