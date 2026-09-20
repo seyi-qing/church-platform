@@ -2,71 +2,113 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from passlib.context import CryptContext
-from sqlalchemy import select
 
 from app.api.v1.router import api_router
 from app.core.config import get_settings
+from app.db.session import engine, AsyncSessionLocal
 from app.db.base import Base
-from app.db.session import AsyncSessionLocal, engine
-from app.models.user import User
 
 import app.models  # noqa: F401
 
 settings = get_settings()
 
-# Setup password hashing context
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-# 🔒 CHANGE THESE TO YOUR CHOSEN ADMIN CREDENTIALS
-ADMIN_EMAIL = "admin@churchplatform.com"
-ADMIN_PASSWORD = "Password123!"  # Replace this with a highly secure password
-ADMIN_FULL_NAME = "System Administrator"
+async def _auto_seed_if_empty() -> None:
+    """Populate demo page/events/media once when the DB is empty."""
+    import json
+    from datetime import datetime, timedelta
+    from sqlalchemy import func, select
+    from app.models.cms import Page
+    from app.models.event import Event
+    from app.models.media import MediaItem, Series
 
-
-async def auto_seed_admin():
-    """Checks for and seeds the master administrator account automatically on boot."""
-    async with AsyncSessionLocal() as session:
+    async with AsyncSessionLocal() as db:
         try:
-            # Check if the user already exists
-            query = select(User).where(User.email == ADMIN_EMAIL)
-            result = await session.execute(query)
-            existing_admin = result.scalar_one_or_none()
-
-            if not existing_admin:
-                print("⏳ Auto-Seeding: Admin account not found. Generating master account...")
-                hashed_password = pwd_context.hash(ADMIN_PASSWORD)
-                
-                admin_user = User(
-                    email=ADMIN_EMAIL,
-                    hashed_password=hashed_password,
-                    full_name=ADMIN_FULL_NAME,
-                    role="admin",
-                    is_superuser=True,
-                    is_active=True,
+            page_count = (await db.execute(select(func.count()).select_from(Page))).scalar() or 0
+            if page_count == 0:
+                db.add(
+                    Page(
+                        title="About Us",
+                        slug="about",
+                        is_published=True,
+                        show_in_nav=True,
+                        content=json.dumps(
+                            {
+                                "blocks": [
+                                    {"type": "heading", "text": "About Grace Church"},
+                                    {
+                                        "type": "text",
+                                        "text": "We are a community following Jesus together in worship, service, and care.",
+                                    },
+                                ]
+                            }
+                        ),
+                    )
                 )
-                session.add(admin_user)
-                await session.commit()
-                print("🎉 Auto-Seeding: Admin account created successfully!")
+
+            event_count = (await db.execute(select(func.count()).select_from(Event))).scalar() or 0
+            if event_count == 0:
+                now = datetime.utcnow()
+                days_until_sunday = (6 - now.weekday()) % 7 or 7
+                db.add(
+                    Event(
+                        title="Sunday Worship",
+                        description="Join us for worship, teaching, and fellowship.",
+                        location="Main Sanctuary",
+                        start_at=now + timedelta(days=days_until_sunday),
+                        is_public=True,
+                    )
+                )
+                db.add(
+                    Event(
+                        title="Midweek Prayer",
+                        description="A quiet hour of prayer for our church and city.",
+                        location="Chapel",
+                        start_at=now + timedelta(days=3),
+                        is_public=True,
+                    )
+                )
+
+            series_count = (await db.execute(select(func.count()).select_from(Series))).scalar() or 0
+            series = None
+            if series_count == 0:
+                series = Series(
+                    title="Foundations of Faith",
+                    description="Core teachings for everyday discipleship.",
+                    is_published=True,
+                )
+                db.add(series)
+                await db.flush()
             else:
-                print("ℹ️ Auto-Seeding: Admin account already exists. Skipping.")
+                series = (await db.execute(select(Series).limit(1))).scalar_one_or_none()
+
+            media_count = (await db.execute(select(func.count()).select_from(MediaItem))).scalar() or 0
+            if media_count == 0 and series is not None:
+                db.add(
+                    MediaItem(
+                        title="What Is the Gospel?",
+                        description="An introduction to the good news of Jesus.",
+                        media_type="sermon",
+                        series_id=series.id,
+                        speaker="Pastor",
+                        is_published=True,
+                        published_at=datetime.utcnow(),
+                    )
+                )
+
+            await db.commit()
         except Exception as e:
-            print(f"❌ Auto-Seeding Error: {e}")
+            await db.rollback()
+            print(f"[seed] skipped: {e}")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # 1. Create tables locally if in development mode
     if settings.ENVIRONMENT == "development":
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
-            
-    # 2. Run the admin automatic background seeding process
-    await auto_seed_admin()
-    
+        await _auto_seed_if_empty()
     yield
-    
-    # 3. Clean up engine resources on shutdown
     await engine.dispose()
 
 
@@ -78,17 +120,10 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Hardcode your exact trusted deployment domains directly here
-trusted_origins = [
-    "http://localhost:3000",
-    "http://localhost:8081",
-    "https://church-platform-mu.vercel.app",  # Your frontend application on Vercel
-]
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=trusted_origins,      # Uses the clean explicit array directly
-    allow_credentials=True,             # Essential for persistent requests
+    allow_origins=settings.BACKEND_CORS_ORIGINS,
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
