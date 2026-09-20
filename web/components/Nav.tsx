@@ -21,7 +21,8 @@ export function Nav() {
               {l.label}
             </Link>
           ))}
-          <Link href="/admin/login" className="text-slate-400 hover:text-brand-600">
+          {/* 💡 FIXED: Point path to base /admin framework instead of routing to the login viewport */}
+          <Link href="/admin" className="text-slate-400 hover:text-brand-600">
             Admin
           </Link>
         </nav>
