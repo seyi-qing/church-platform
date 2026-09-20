@@ -18,14 +18,11 @@ export default function MemberDashboardPortal() {
       try {
         const u = await apiFetch("/auth/me");
         setUser(u);
-        
-        // Populate profile fallback options
         if (u.member_profile) {
           setAddress(u.member_profile.address || "");
           setNotes(u.member_profile.notes || "");
         }
       } catch (err) {
-        console.error(err);
         logout();
         router.replace("/admin/login");
       } finally {
@@ -39,12 +36,11 @@ export default function MemberDashboardPortal() {
     e.preventDefault();
     setSaving(true);
     try {
-      // Safely saves non-sensitive member metrics
       await apiFetch("/members/profiles", {
         method: "POST",
         body: JSON.stringify({ address, notes })
       });
-      alert("🎉 Profile information synchronized successfully!");
+      alert("🎉 Changes saved successfully!");
     } catch (err: any) {
       alert(`Update failed: ${err.message}`);
     } finally {
@@ -52,50 +48,87 @@ export default function MemberDashboardPortal() {
     }
   }
 
-  if (loading) return <div className="p-8 text-center text-sm font-medium text-slate-500">Syncing member profile...</div>;
+  if (loading) return <div className="p-8 text-center text-sm font-medium text-slate-500">Loading your secure profile...</div>;
 
   return (
-    <div className="max-w-4xl mx-auto py-8 px-4 grid grid-cols-1 md:grid-cols-3 gap-6">
-      {/* Short Side Profile Card */}
-      <div className="md:col-span-1 rounded-xl border bg-white p-6 shadow-sm text-center space-y-4 h-fit">
-        <div className="h-20 w-20 rounded-full bg-brand-100 text-brand-700 mx-auto flex items-center justify-center text-2xl font-bold uppercase">
+    <div className="max-w-xl mx-auto py-6 px-4 space-y-6">
+      {/* Dynamic Profile Summary Heading Card */}
+      <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm text-center relative overflow-hidden">
+        <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-brand-500 to-brand-600" />
+        
+        <div className="h-20 w-20 rounded-full bg-brand-100 text-brand-700 mx-auto flex items-center justify-center text-2xl font-black uppercase tracking-tight shadow-inner">
           {user?.full_name?.substring(0, 2) || "ME"}
         </div>
-        <div>
-          <h2 className="font-bold text-slate-900 text-lg">{user?.full_name}</h2>
-          <p className="text-xs uppercase text-brand-600 font-bold tracking-wider">{user?.role}</p>
+        
+        <div className="mt-3">
+          <h2 className="font-extrabold text-slate-900 text-xl tracking-tight">{user?.full_name}</h2>
+          <span className="mt-1 inline-block text-[10px] uppercase font-bold tracking-widest text-brand-700 bg-brand-50 px-2.5 py-0.5 rounded-full border border-brand-200">
+            {user?.role} Portal
+          </span>
         </div>
-        <div className="border-t pt-4 text-left text-xs space-y-2 text-slate-600">
-          <p><strong>Email:</strong> {user?.email}</p>
-          <p><strong>Phone:</strong> {user?.phone || "Not provided"}</p>
-          <p><strong>Status:</strong> {user?.member_profile?.membership_status || "Active"}</p>
+        
+        <div className="mt-4 pt-4 border-t border-slate-100 grid grid-cols-2 text-left gap-4 text-xs text-slate-600">
+          <div>
+            <span className="font-bold block text-slate-400 text-[10px] uppercase tracking-wider">Email Address</span>
+            <span className="truncate block mt-0.5 font-medium">{user?.email}</span>
+          </div>
+          <div>
+            <span className="font-bold block text-slate-400 text-[10px] uppercase tracking-wider">Registry Status</span>
+            <span className="block mt-0.5 font-medium text-emerald-600 flex items-center gap-1">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+              {user?.member_profile?.membership_status || "Active"}
+            </span>
+          </div>
         </div>
-        <button type="button" onClick={() => { logout(); localStorage.clear(); router.push("/admin/login"); }} className="w-full mt-2 rounded-lg border border-slate-200 py-2 text-xs font-semibold text-red-600 hover:bg-red-50 transition">
-          Sign out
-        </button>
       </div>
 
-      {/* Profile Modification Details Form Area */}
-      <div className="md:col-span-2 rounded-xl border bg-white p-6 shadow-sm space-y-4">
+      {/* Personal Metric Forms Canvas Panel */}
+      <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm space-y-4">
         <div>
-          <h2 className="text-xl font-bold text-slate-900">Personal Information Management</h2>
-          <p className="text-xs text-slate-500">Keep your church registry data, addresses, and connect notes updated.</p>
+          <h3 className="text-base font-bold text-slate-900 tracking-tight">Personal Information Management</h3>
+          <p className="text-xs text-slate-400 mt-0.5">Modify your localized address data and pastoral communication logs securely.</p>
         </div>
 
-        <form onSubmit={handleUpdateProfile} className="space-y-4 border-t pt-4">
+        <form onSubmit={handleUpdateProfile} className="space-y-4 border-t border-slate-100 pt-4">
           <div>
-            <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wide">Home Address Location</label>
-            <textarea value={address} onChange={(e) => setAddress(e.target.value)} rows={3} className="mt-1 w-full rounded-lg border border-slate-300 p-2 text-sm focus:outline-none" placeholder="123 Church Street, Kampala" />
+            <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wide">Home Address Location</label>
+            <input 
+              type="text"
+              value={address} 
+              onChange={(e) => setAddress(e.target.value)} 
+              className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:border-brand-500 focus:outline-none transition bg-slate-50 focus:bg-white" 
+              placeholder="E.g. 123 Church Street, Kampala" 
+            />
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wide">Pastoral Notes / Prayer Needs</label>
-            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={4} className="mt-1 w-full rounded-lg border border-slate-300 p-2 text-sm focus:outline-none" placeholder="Share notes, updates, or specific prayer items with the pastoral care team..." />
+            <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wide">Prayer Requests / Connection Notes</label>
+            <textarea 
+              value={notes} 
+              onChange={(e) => setNotes(e.target.value)} 
+              rows={4} 
+              className="mt-1.5 w-full rounded-xl border border-slate-200 p-3 text-sm focus:border-brand-500 focus:outline-none transition bg-slate-50 focus:bg-white" 
+              placeholder="Share updates, needs, or communication logs directly with the care team..." 
+            />
           </div>
 
-          <button type="submit" disabled={saving} className="w-full rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 transition disabled:opacity-50">
-            {saving ? "Synchronizing Changes..." : "Commit Profile Changes"}
-          </button>
+          <div className="pt-2 flex flex-col gap-2">
+            <button 
+              type="submit" 
+              disabled={saving} 
+              className="w-full rounded-xl bg-brand-600 py-3 text-sm font-semibold text-white hover:bg-brand-700 transition shadow-sm disabled:opacity-50"
+            >
+              {saving ? "Saving changes..." : "Commit Data Updates"}
+            </button>
+            
+            <button 
+              type="button" 
+              onClick={() => { logout(); localStorage.clear(); router.push("/admin/login"); }} 
+              className="w-full rounded-xl border border-slate-200 py-2.5 text-xs font-semibold text-red-600 hover:bg-red-50 transition"
+            >
+              Sign Out Account
+            </button>
+          </div>
         </form>
       </div>
     </div>
