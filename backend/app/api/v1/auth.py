@@ -1,4 +1,6 @@
-from fastapi import APIRouter, HTTPException, status
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import select
 
@@ -57,21 +59,13 @@ async def login_json(payload: LoginRequest, db: DbSession):
 
 @router.post("/login", response_model=Token)
 async def login(
-    form_data: OAuth2PasswordRequestForm = None,
-    payload: LoginRequest = None,
-    db: DbSession = None,
+    db: DbSession,
+    form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
 ):
-    email = password = None
-    if form_data and form_data.username:
-        email, password = form_data.username, form_data.password
-    elif payload:
-        email, password = payload.email, payload.password
-    else:
-        raise HTTPException(status_code=422, detail="Email and password required")
-
-    result = await db.execute(select(User).where(User.email == email))
+    """OAuth2 form login (Swagger Authorize). App clients use /login/json."""
+    result = await db.execute(select(User).where(User.email == form_data.username))
     user = result.scalar_one_or_none()
-    if not user or not verify_password(password, user.hashed_password):
+    if not user or not verify_password(form_data.password, user.hashed_password):
         raise HTTPException(status_code=400, detail="Incorrect email or password")
     if not user.is_active:
         raise HTTPException(status_code=400, detail="Inactive user")
