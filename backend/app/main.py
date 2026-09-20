@@ -104,10 +104,11 @@ async def _auto_seed_if_empty() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    if settings.ENVIRONMENT == "development":
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
-        await _auto_seed_if_empty()
+    # Create tables + seed empty DB in any environment (suitable for free-tier testing).
+    # For a hardened production later, switch to Alembic-only and disable auto-seed.
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    await _auto_seed_if_empty()
     yield
     await engine.dispose()
 
