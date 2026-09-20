@@ -1,10 +1,25 @@
 from fastapi import APIRouter
 
-from app.api.v1 import auth, members, giving, media, events, livestream, cms, ai, analytics, notifications, campuses, care
+from app.api.v1 import (
+    auth,
+    seed,
+    members,
+    giving,
+    media,
+    events,
+    livestream,
+    cms,
+    ai,
+    analytics,
+    notifications,
+    campuses,
+    care,
+)
 
 api_router = APIRouter()
 
 api_router.include_router(auth.router)
+api_router.include_router(seed.router)
 api_router.include_router(members.router)
 api_router.include_router(giving.router)
 api_router.include_router(media.router)
