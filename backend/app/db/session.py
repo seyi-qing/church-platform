@@ -1,5 +1,8 @@
+from __future__ import annotations
+
+import re
 from collections.abc import AsyncGenerator
-from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
@@ -7,51 +10,64 @@ from app.core.config import get_settings
 
 settings = get_settings()
 
+# Query keys asyncpg rejects (libpq-style)
+_ASYNC_PG_FORBIDDEN = {
+    "sslmode",
+    "channel_binding",
+    "sslrootcert",
+    "sslcert",
+    "sslkey",
+    "sslcrl",
+    "gssencmode",
+    "target_session_attrs",
+}
 
-def _normalize_database_url(url: str) -> tuple[str, dict]:
-    """
-    asyncpg rejects libpq query params like sslmode= and channel_binding=.
-    Strip them and enable SSL via connect_args when needed (Neon, etc.).
-    """
+
+def _normalize_database_url(raw: str) -> tuple[str, dict]:
+    """Strip libpq params and enable TLS for cloud Postgres hosts."""
     connect_args: dict = {}
-    if not url:
-        return url, connect_args
+    if not raw:
+        return raw, connect_args
 
-    # Ensure async driver prefix
-    if url.startswith("postgresql://"):
-        url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
-    elif url.startswith("postgres://"):
-        url = url.replace("postgres://", "postgresql+asyncpg://", 1)
+    url = raw.strip().strip('"').strip("'")
+
+    if url.startswith("postgres://"):
+        url = "postgresql+asyncpg://" + url[len("postgres://") :]
+    elif url.startswith("postgresql://"):
+        url = "postgresql+asyncpg://" + url[len("postgresql://") :]
+    elif not url.startswith("postgresql+asyncpg://"):
+        # leave other schemes alone
+        pass
+
+    # Hard strip forbidden query params (handles weird encoding)
+    for key in _ASYNC_PG_FORBIDDEN:
+        url = re.sub(
+            rf"([?&]){key}=[^&]*&?",
+            lambda m: "?" if m.group(1) == "?" and not m.group(0).endswith("&") else m.group(1) if m.group(1) == "&" else "",
+            url,
+            flags=re.IGNORECASE,
+        )
+    url = re.sub(r"\?&", "?", url)
+    url = re.sub(r"\?$", "", url)
+    url = re.sub(r"&&+", "&", url)
 
     parsed = urlparse(url)
-    qs = parse_qs(parsed.query)
-
-    # Remove params asyncpg does not accept
-    sslmode = None
-    for key in list(qs.keys()):
-        low = key.lower()
-        if low == "sslmode":
-            sslmode = qs.pop(key)[0]
-        elif low in ("channel_binding", "ssl", "sslrootcert", "sslcert", "sslkey"):
-            if low == "ssl":
-                sslmode = qs.pop(key)[0]
-            else:
-                qs.pop(key)
-
-    host = parsed.hostname or ""
-    needs_ssl = (
-        sslmode in ("require", "verify-full", "verify-ca", "true", "1")
-        or "neon.tech" in host
-        or "render.com" in host
-        or "amazonaws.com" in host
+    pairs = [(k, v) for k, v in parse_qsl(parsed.query, keep_blank_values=True) if k.lower() not in _ASYNC_PG_FORBIDDEN]
+    clean_query = urlencode(pairs)
+    clean_url = urlunparse(
+        (parsed.scheme, parsed.netloc, parsed.path, parsed.params, clean_query, parsed.fragment)
     )
-    if needs_ssl:
+
+    host = (parsed.hostname or "").lower()
+    if any(
+        x in host
+        for x in ("neon.tech", "render.com", "amazonaws.com", "supabase.co", "railway.app")
+    ):
         connect_args["ssl"] = True
 
-    new_query = urlencode({k: v[0] for k, v in qs.items()})
-    clean_url = urlunparse(
-        (parsed.scheme, parsed.netloc, parsed.path, parsed.params, new_query, parsed.fragment)
-    )
+    # Never pass sslmode into connect_args
+    connect_args.pop("sslmode", None)
+
     return clean_url, connect_args
 
 
