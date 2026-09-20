@@ -39,6 +39,7 @@ export default function ProfilePage() {
   }
 
   const initials = (user.full_name || user.email || "ME").substring(0, 2).toUpperCase();
+  const isActive = user.is_active !== false;
 
   return (
     <div className="mx-auto max-w-lg space-y-6">
@@ -52,16 +53,31 @@ export default function ProfilePage() {
             Member portal
           </span>
         </div>
+
         <dl className="mt-6 grid grid-cols-2 gap-4 border-t pt-4 text-left text-sm">
           <div>
-            <dt className="text-xs uppercase tracking-wide text-slate-400">Email</dt>
+            <dt className="text-xs uppercase tracking-wide text-slate-400">Email address</dt>
             <dd className="mt-0.5 break-all font-medium text-slate-800">{user.email}</dd>
+          </div>
+          <div>
+            <dt className="text-xs uppercase tracking-wide text-slate-400">Registry status</dt>
+            <dd className="mt-1 flex items-center gap-1.5 font-medium">
+              <span
+                className={`inline-block h-2 w-2 rounded-full ${
+                  isActive ? "bg-green-500" : "bg-slate-400"
+                }`}
+              />
+              <span className={isActive ? "text-green-700" : "text-slate-600"}>
+                {isActive ? "Active" : "Inactive"}
+              </span>
+            </dd>
           </div>
           <div>
             <dt className="text-xs uppercase tracking-wide text-slate-400">Role</dt>
             <dd className="mt-0.5 font-medium capitalize text-slate-800">{user.role}</dd>
           </div>
         </dl>
+
         <div className="mt-4 flex flex-wrap gap-2">
           <Link
             href="/give"
@@ -97,7 +113,11 @@ export default function ProfilePage() {
         </p>
         {loadingGifts && <p className="mt-4 text-sm text-slate-500">Loading…</p>}
         {giftError && (
-          <p className="mt-4 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">{giftError}</p>
+          <p className="mt-4 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            {giftError === "Not Found" || giftError.toLowerCase().includes("not found")
+              ? "Giving history API is updating. Wait for the API redeploy, then refresh."
+              : giftError}
+          </p>
         )}
         {!loadingGifts && !giftError && gifts.length === 0 && (
           <p className="mt-4 text-sm text-slate-500">
