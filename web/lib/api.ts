@@ -20,6 +20,8 @@ export async function apiFetch<T>(
   const res = await fetch(`${API_URL}${path}`, {
     ...options,
     headers,
+    // Avoid stale empty lists from Next.js static/SSR cache
+    cache: options.cache ?? "no-store",
   });
 
   if (res.status === 401) {

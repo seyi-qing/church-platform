@@ -1,5 +1,8 @@
 import { apiFetch } from "@/lib/api";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 type Event = {
   id: number;
   title: string;
@@ -11,7 +14,7 @@ type Event = {
 
 async function getEvents(): Promise<Event[]> {
   try {
-    return await apiFetch<Event[]>("/events?limit=20");
+    return await apiFetch<Event[]>("/events?limit=20", { cache: "no-store" });
   } catch {
     return [];
   }
