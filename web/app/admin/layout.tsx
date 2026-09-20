@@ -25,38 +25,53 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [ready, setReady] = useState(false);
   const [user, setUser] = useState<any>(null);
 
-  // 💡 Check authentication strictly ONCE when the administrative frame mounts
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const token = getToken();
-      const storedUser = localStorage.getItem("user");
-
-      if (!token && window.location.pathname !== "/admin/login") {
-        router.replace("/admin/login");
-      } else {
-        if (storedUser) {
-          try {
-            setUser(JSON.parse(storedUser));
-          } catch (e) {
-            console.error(e);
-          }
-        }
-        setReady(true);
-      }
+    // 💡 Safety check: Prevent running layout auth rules on the actual login route
+    if (pathname === "/admin/login") {
+      setReady(true);
+      return;
     }
-  }, [router]);
 
-  if (pathname === "/admin/login") return <>{children}</>;
-  if (!ready) return <div className="p-8 text-slate-500 font-medium">Loading panel workspace...</div>;
+    const token = getToken();
+    const storedUser = localStorage.getItem("user");
+
+    if (!token) {
+      // 💡 Clean up memory completely if token is genuinely missing
+      localStorage.clear();
+      router.replace("/admin/login");
+    } else {
+      if (storedUser) {
+        try {
+          setUser(JSON.parse(storedUser));
+        } catch (e) {
+          console.error("Error parsing profile cache:", e);
+        }
+      }
+      setReady(true);
+    }
+  }, [pathname, router]); // Keep track of sub-tab paths safely
+
+  // Skip rendering the frame if we are on the login screen
+  if (pathname === "/admin/login") {
+    return <>{children}</>;
+  }
+
+  // Show a clean workspace loader during the initial hydration split-second check
+  if (!ready) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-50">
+        <p className="text-sm font-medium text-slate-500">Syncing your secure workspace...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen bg-slate-50">
-      {/* Persistent Administrative Sidebar */}
+      {/* 💻 Persistent Administrative Sidebar - Guaranteed to display on all sub-routes */}
       <aside className="w-56 shrink-0 border-r bg-slate-900 text-slate-100 flex flex-col justify-between">
         <div>
           <div className="p-4 border-b border-slate-800">
             <div className="text-sm font-bold tracking-wide text-white">Church Admin</div>
-            {/* 💡 Display user profile name seamlessly inside the sidebar header */}
             {user && (
               <p className="text-xs text-slate-400 mt-1 truncate">
                 {user.full_name || user.email}
@@ -65,6 +80,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </div>
           <nav className="space-y-0.5 px-2 mt-4">
             {nav.map((item) => {
+              // Matches exact dashboard route or nested sub-items accurately
               const isActive =
                 item.href === "/admin"
                   ? pathname === "/admin"
@@ -102,8 +118,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </div>
       </aside>
 
-      {/* Primary Page Canvas */}
-      <div className="flex-1 overflow-auto p-8">{children}</div>
+      {/* 🖥️ Dynamic Content Canvas - Where sub-pages render */}
+      <main className="flex-1 overflow-auto p-8">{children}</main>
     </div>
   );
-    }
+}
