@@ -1,6 +1,51 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import { API_URL } from "@/lib/api";
+
+type MediaItem = {
+  id: number;
+  title: string;
+  description: string | null;
+  speaker: string | null;
+};
+
+type EventItem = {
+  id: number;
+  title: string;
+  description: string | null;
+  location: string | null;
+  start_at: string;
+};
 
 export default function HomePage() {
+  const [sermons, setSermons] = useState<MediaItem[]>([]);
+  const [events, setEvents] = useState<EventItem[]>([]);
+
+  useEffect(() => {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 90000);
+
+    fetch(`${API_URL}/media/items?media_type=sermon&limit=3`, {
+      signal: ctrl.signal,
+      cache: "no-store",
+    })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((d) => setSermons(Array.isArray(d) ? d : []))
+      .catch(() => {});
+
+    fetch(`${API_URL}/events?limit=3`, { signal: ctrl.signal, cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((d) => setEvents(Array.isArray(d) ? d : []))
+      .catch(() => {});
+
+    return () => {
+      clearTimeout(t);
+      ctrl.abort();
+    };
+  }, []);
+
   return (
     <div className="space-y-12">
       <section className="rounded-2xl bg-blue-700 px-6 py-12 text-white shadow-lg sm:px-10 sm:py-16">
@@ -26,43 +71,90 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* Latest sermons */}
+      <section>
+        <div className="mb-4 flex items-end justify-between gap-4">
+          <div>
+            <h2 className="text-2xl font-bold text-slate-900">Latest sermons</h2>
+            <p className="mt-1 text-sm text-slate-500">Recent messages from Sunday gatherings</p>
+          </div>
+          <Link href="/sermons" className="text-sm font-semibold text-blue-600 hover:underline">
+            View all
+          </Link>
+        </div>
+        {sermons.length === 0 ? (
+          <p className="rounded-xl border bg-white p-6 text-sm text-slate-500">
+            Loading sermons… or none published yet.
+          </p>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-3">
+            {sermons.map((s) => (
+              <Link
+                key={s.id}
+                href={`/sermons#sermon-${s.id}`}
+                className="rounded-xl border bg-white p-5 shadow-sm transition hover:shadow-md"
+              >
+                <div className="mb-3 flex h-24 items-center justify-center rounded-lg bg-slate-100 text-sm text-slate-400">
+                  Sermon
+                </div>
+                <h3 className="font-semibold text-slate-900">{s.title}</h3>
+                {s.speaker && <p className="mt-1 text-sm text-slate-500">{s.speaker}</p>}
+                {s.description && (
+                  <p className="mt-2 line-clamp-2 text-sm text-slate-600">{s.description}</p>
+                )}
+              </Link>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* Upcoming events */}
+      <section>
+        <div className="mb-4 flex items-end justify-between gap-4">
+          <div>
+            <h2 className="text-2xl font-bold text-slate-900">Upcoming events</h2>
+            <p className="mt-1 text-sm text-slate-500">Gatherings and ways to get involved</p>
+          </div>
+          <Link href="/events" className="text-sm font-semibold text-blue-600 hover:underline">
+            View all
+          </Link>
+        </div>
+        {events.length === 0 ? (
+          <p className="rounded-xl border bg-white p-6 text-sm text-slate-500">
+            Loading events… or none listed yet.
+          </p>
+        ) : (
+          <ul className="space-y-3">
+            {events.map((e) => (
+              <li key={e.id} className="rounded-xl border bg-white p-5 shadow-sm">
+                <h3 className="font-semibold text-slate-900">{e.title}</h3>
+                <p className="mt-1 text-sm text-slate-500">
+                  {new Date(e.start_at).toLocaleString()}
+                  {e.location ? ` · ${e.location}` : ""}
+                </p>
+                {e.description && (
+                  <p className="mt-2 text-sm text-slate-600">{e.description}</p>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
       <section className="grid gap-6 sm:grid-cols-3">
-        <FeatureCard
-          title="Sermons"
-          description="Catch up on recent messages and series anytime."
-          href="/sermons"
-        />
-        <FeatureCard
-          title="Events"
-          description="Find gatherings, classes, and ways to get involved."
-          href="/events"
-        />
-        <FeatureCard
-          title="Give"
-          description="Support the mission with secure online giving."
-          href="/give"
-        />
+        <Link href="/sermons" className="rounded-xl border bg-white p-6 shadow-sm hover:shadow-md">
+          <h2 className="text-lg font-semibold">Sermons</h2>
+          <p className="mt-2 text-sm text-slate-600">Catch up on recent messages and series anytime.</p>
+        </Link>
+        <Link href="/events" className="rounded-xl border bg-white p-6 shadow-sm hover:shadow-md">
+          <h2 className="text-lg font-semibold">Events</h2>
+          <p className="mt-2 text-sm text-slate-600">Find gatherings, classes, and ways to get involved.</p>
+        </Link>
+        <Link href="/give" className="rounded-xl border bg-white p-6 shadow-sm hover:shadow-md">
+          <h2 className="text-lg font-semibold">Give</h2>
+          <p className="mt-2 text-sm text-slate-600">Support the mission with secure online giving.</p>
+        </Link>
       </section>
     </div>
-  );
-}
-
-function FeatureCard({
-  title,
-  description,
-  href,
-}: {
-  title: string;
-  description: string;
-  href: string;
-}) {
-  return (
-    <Link
-      href={href}
-      className="rounded-xl border bg-white p-6 shadow-sm transition hover:shadow-md"
-    >
-      <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
-      <p className="mt-2 text-sm text-slate-600">{description}</p>
-    </Link>
   );
 }

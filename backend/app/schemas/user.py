@@ -16,6 +16,14 @@ class UserCreate(BaseModel):
     password: str = Field(min_length=8)
 
 
+class UserCreateStaff(BaseModel):
+    email: EmailStr
+    full_name: str
+    password: str
+    phone: str | None = None
+    role: str = "member"
+
+
 class UserUpdate(BaseModel):
     full_name: str | None = None
     phone: str | None = None
