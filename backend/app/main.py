@@ -78,10 +78,17 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Hardcode your exact trusted deployment domains directly here
+trusted_origins = [
+    "http://localhost:3000",
+    "http://localhost:8081",
+    "https://church-platform-mu.vercel.app/",  # Your frontend application on Vercel
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.BACKEND_CORS_ORIGINS,
-    allow_credentials=True,
+    allow_origins=trusted_origins,      # Uses the clean explicit array directly
+    allow_credentials=True,             # Essential for persistent requests
     allow_methods=["*"],
     allow_headers=["*"],
 )
