@@ -1,7 +1,7 @@
 # app/api/v1/auth.py
 from datetime import timedelta
 
-from fastapi import APIRouter, HTTPException, status, Depends
+from fastapi import APIRouter, HTTPException, status, Depends, Response
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import select
 
@@ -40,9 +40,8 @@ async def register(payload: UserCreate, db: DbSession):
     return user
 
 
-# 💡 ADDED: Form-urlencoded login endpoint required by OAuth2PasswordBearer / form fields
 @router.post("/login", response_model=Token)
-async def login_form(db: DbSession, form_data: OAuth2PasswordRequestForm = Depends()):
+async def login_form(response: Response, db: DbSession, form_data: OAuth2PasswordRequestForm = Depends()):
     result = await db.execute(select(User).where(User.email == form_data.username))
     user = result.scalar_one_or_none()
     if not user or not verify_password(form_data.password, user.hashed_password):
@@ -50,14 +49,27 @@ async def login_form(db: DbSession, form_data: OAuth2PasswordRequestForm = Depen
     if not user.is_active:
         raise HTTPException(status_code=400, detail="Inactive user")
 
+    access_token = create_access_token(user.id)
+    refresh_token = create_refresh_token(user.id)
+
+    # 💡 Set auth cookie for standard form login dashboards
+    response.set_cookie(
+        key="access_token",
+        value=f"Bearer {access_token}",
+        httponly=True,
+        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        samesite="lax",
+        secure=True,
+    )
+
     return Token(
-        access_token=create_access_token(user.id),
-        refresh_token=create_refresh_token(user.id),
+        access_token=access_token,
+        refresh_token=refresh_token,
     )
 
 
 @router.post("/login/json", response_model=Token)
-async def login_json(payload: LoginRequest, db: DbSession):
+async def login_json(payload: LoginRequest, db: DbSession, response: Response):
     result = await db.execute(select(User).where(User.email == payload.email))
     user = result.scalar_one_or_none()
     if not user or not verify_password(payload.password, user.hashed_password):
@@ -65,9 +77,22 @@ async def login_json(payload: LoginRequest, db: DbSession):
     if not user.is_active:
         raise HTTPException(status_code=400, detail="Inactive user")
 
+    access_token = create_access_token(user.id)
+    refresh_token = create_refresh_token(user.id)
+
+    # 💡 Set auth cookie for JSON-based frontend dashboards
+    response.set_cookie(
+        key="access_token",
+        value=f"Bearer {access_token}",
+        httponly=True,
+        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        samesite="lax",
+        secure=True,
+    )
+
     return Token(
-        access_token=create_access_token(user.id),
-        refresh_token=create_refresh_token(user.id),
+        access_token=access_token,
+        refresh_token=refresh_token,
     )
 
 
@@ -91,4 +116,3 @@ async def refresh_token(payload: RefreshRequest, db: DbSession):
 @router.get("/me", response_model=UserOut)
 async def me(current_user: CurrentUser):
     return current_user
-    
