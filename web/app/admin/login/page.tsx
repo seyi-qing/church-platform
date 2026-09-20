@@ -30,26 +30,22 @@ export default function AdminLoginPage() {
         { method: "POST", body: JSON.stringify({ email, password }) }
       );
 
-      // 💡 FIXED: Save access keys into storage FIRST so apiFetch("/auth/me") reads them
+      // Save access keys into storage FIRST so apiFetch("/auth/me") reads them
       setAuth(tokens.access_token, tokens.refresh_token);
 
-      // 2. Safely call backend profile endpoint with the token populated in storage
+      // 2. Fetch the current logged-in user profile details
       const user = await apiFetch<any>("/auth/me");
-      if (!["admin", "pastor", "leader"].includes(user.role) && !user.is_superuser) {
-        setError("You do not have staff access.");
-        // Clean out unauthorized storage items
-        localStorage.clear();
-        setLoading(false);
-        return;
-      }
-
-      // 3. Update storage to record the profile payload
+      
+      // Update storage to record the profile payload completely
       localStorage.setItem("user", JSON.stringify(user));
       
-      // 4. Redirect safely to dashboard panels
-      router.replace("/admin");
+      // 3. 💡 FIXED DYNAMIC ROUTING: Send staff to management, and members to profile workspace
+      if (["admin", "pastor", "leader", "secretary"].includes(user.role) || user.is_superuser) {
+        router.replace("/admin");
+      } else {
+        router.replace("/profile");
+      }
     } catch (err: any) {
-      // Clean out any partial tokens on failure
       localStorage.clear();
       setError(err.message || "Login failed");
     } finally {
@@ -61,8 +57,8 @@ export default function AdminLoginPage() {
     <div className="flex min-h-[70vh] items-center justify-center">
       <form onSubmit={handleSubmit} className="w-full max-w-sm space-y-5 rounded-xl border bg-white p-8 shadow-sm">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Staff Login</h1>
-          <p className="mt-1 text-sm text-slate-500">Sign in to the admin dashboard</p>
+          <h1 className="text-2xl font-bold text-slate-900">Account Login</h1>
+          <p className="mt-1 text-sm text-slate-500">Sign in to your church dashboard</p>
         </div>
         <div>
           <label className="block text-sm font-medium text-slate-700">Email</label>
@@ -79,4 +75,4 @@ export default function AdminLoginPage() {
       </form>
     </div>
   );
-            }
+  }
