@@ -1,12 +1,8 @@
-# app/api/v1/auth.py
-from datetime import timedelta
-
-from fastapi import APIRouter, HTTPException, status, Depends, Response
+from fastapi import APIRouter, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import select
 
 from app.api.deps import DbSession, CurrentUser
-from app.core.config import get_settings
 from app.core.security import (
     create_access_token,
     create_refresh_token,
@@ -18,11 +14,19 @@ from app.models.user import User
 from app.schemas.user import LoginRequest, RefreshRequest, Token, UserCreate, UserOut
 
 router = APIRouter(prefix="/auth", tags=["auth"])
-settings = get_settings()
+
+
+def _tokens_for(user: User) -> Token:
+    return Token(
+        access_token=create_access_token(user.id),
+        refresh_token=create_refresh_token(user.id),
+        user=UserOut.model_validate(user),
+    )
 
 
 @router.post("/register", response_model=UserOut, status_code=status.HTTP_201_CREATED)
 async def register(payload: UserCreate, db: DbSession):
+    """Public signup — always creates a member account."""
     result = await db.execute(select(User).where(User.email == payload.email))
     if result.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="Email already registered")
@@ -32,7 +36,7 @@ async def register(payload: UserCreate, db: DbSession):
         hashed_password=get_password_hash(payload.password),
         full_name=payload.full_name,
         phone=payload.phone,
-        role=payload.role if payload.role in ("member", "leader") else "member",
+        role="member",
     )
     db.add(user)
     await db.flush()
@@ -40,60 +44,38 @@ async def register(payload: UserCreate, db: DbSession):
     return user
 
 
-@router.post("/login", response_model=Token)
-async def login_form(response: Response, db: DbSession, form_data: OAuth2PasswordRequestForm = Depends()):
-    result = await db.execute(select(User).where(User.email == form_data.username))
-    user = result.scalar_one_or_none()
-    if not user or not verify_password(form_data.password, user.hashed_password):
-        raise HTTPException(status_code=400, detail="Incorrect email or password")
-    if not user.is_active:
-        raise HTTPException(status_code=400, detail="Inactive user")
-
-    access_token = create_access_token(user.id)
-    refresh_token = create_refresh_token(user.id)
-
-    # 💡 Set auth cookie for standard form login dashboards
-    response.set_cookie(
-        key="access_token",
-        value=f"Bearer {access_token}",
-        httponly=True,
-        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-        samesite="none",
-        secure=True,
-    )
-
-    return Token(
-        access_token=access_token,
-        refresh_token=refresh_token,
-    )
-
-
 @router.post("/login/json", response_model=Token)
-async def login_json(payload: LoginRequest, db: DbSession, response: Response):
+async def login_json(payload: LoginRequest, db: DbSession):
     result = await db.execute(select(User).where(User.email == payload.email))
     user = result.scalar_one_or_none()
     if not user or not verify_password(payload.password, user.hashed_password):
         raise HTTPException(status_code=400, detail="Incorrect email or password")
     if not user.is_active:
         raise HTTPException(status_code=400, detail="Inactive user")
+    return _tokens_for(user)
 
-    access_token = create_access_token(user.id)
-    refresh_token = create_refresh_token(user.id)
 
-    # 💡 Set auth cookie for JSON-based frontend dashboards
-    response.set_cookie(
-        key="access_token",
-        value=f"Bearer {access_token}",
-        httponly=True,
-        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-        samesite="none",
-        secure=True,
-    )
+@router.post("/login", response_model=Token)
+async def login(
+    form_data: OAuth2PasswordRequestForm = None,
+    payload: LoginRequest = None,
+    db: DbSession = None,
+):
+    email = password = None
+    if form_data and form_data.username:
+        email, password = form_data.username, form_data.password
+    elif payload:
+        email, password = payload.email, payload.password
+    else:
+        raise HTTPException(status_code=422, detail="Email and password required")
 
-    return Token(
-        access_token=access_token,
-        refresh_token=refresh_token,
-    )
+    result = await db.execute(select(User).where(User.email == email))
+    user = result.scalar_one_or_none()
+    if not user or not verify_password(password, user.hashed_password):
+        raise HTTPException(status_code=400, detail="Incorrect email or password")
+    if not user.is_active:
+        raise HTTPException(status_code=400, detail="Inactive user")
+    return _tokens_for(user)
 
 
 @router.post("/refresh", response_model=Token)
@@ -101,16 +83,11 @@ async def refresh_token(payload: RefreshRequest, db: DbSession):
     user_id = verify_token(payload.refresh_token, expected_type="refresh")
     if not user_id:
         raise HTTPException(status_code=401, detail="Invalid refresh token")
-
     result = await db.execute(select(User).where(User.id == int(user_id)))
     user = result.scalar_one_or_none()
     if not user or not user.is_active:
         raise HTTPException(status_code=401, detail="Invalid user")
-
-    return Token(
-        access_token=create_access_token(user.id),
-        refresh_token=create_refresh_token(user.id),
-    )
+    return _tokens_for(user)
 
 
 @router.get("/me", response_model=UserOut)

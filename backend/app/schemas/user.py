@@ -9,7 +9,10 @@ class UserBase(BaseModel):
     role: str = "member"
 
 
-class UserCreate(UserBase):
+class UserCreate(BaseModel):
+    email: EmailStr
+    full_name: str
+    phone: str | None = None
     password: str = Field(min_length=8)
 
 
@@ -25,6 +28,7 @@ class UserOut(UserBase):
     is_active: bool
     is_superuser: bool
     created_at: datetime
+
     model_config = {"from_attributes": True}
 
 
@@ -32,6 +36,12 @@ class Token(BaseModel):
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
+    user: UserOut | None = None
+
+
+class TokenPayload(BaseModel):
+    sub: str | None = None
+    type: str | None = None
 
 
 class LoginRequest(BaseModel):
