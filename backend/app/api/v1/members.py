@@ -1,8 +1,11 @@
 from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import select
 
+from app.core.security import get_password_hash
 from app.api.deps import AdminUser, CurrentUser, DbSession, LeaderUser
 from app.models.member import Attendance, Family, Group, GroupMembership, MemberProfile
+from app.models.user import User
+from app.schemas.user import UserOut, UserCreateStaff
 from app.schemas.member import (
     AttendanceCreate,
     FamilyCreate,
@@ -16,6 +19,37 @@ from app.schemas.member import (
 )
 
 router = APIRouter(prefix="/members", tags=["members / ChMS"])
+
+
+@router.get("/users", response_model=list[UserOut])
+async def list_users(db: DbSession, _: AdminUser, skip: int = 0, limit: int = 100):
+    result = await db.execute(select(User).order_by(User.id).offset(skip).limit(limit))
+    return result.scalars().all()
+
+
+@router.post("/users", response_model=UserOut, status_code=status.HTTP_201_CREATED)
+async def create_user_staff(payload: UserCreateStaff, db: DbSession, _: AdminUser):
+    existing = await db.execute(select(User).where(User.email == payload.email))
+    if existing.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="Email already registered")
+    role = (
+        payload.role
+        if payload.role in ("member", "leader", "secretary", "pastor", "admin")
+        else "member"
+    )
+    user = User(
+        email=payload.email,
+        hashed_password=get_password_hash(payload.password),
+        full_name=payload.full_name,
+        phone=payload.phone,
+        role=role,
+    )
+    db.add(user)
+    await db.flush()
+    await db.refresh(user)
+    db.add(MemberProfile(user_id=user.id, membership_status="active"))
+    await db.flush()
+    return user
 
 
 @router.post("/families", response_model=FamilyOut, status_code=status.HTTP_201_CREATED)
@@ -105,7 +139,6 @@ async def update_my_profile(
         profile = MemberProfile(user_id=current_user.id, membership_status="active")
         db.add(profile)
         await db.flush()
-
     data = payload.model_dump(exclude_unset=True)
     allowed = {"address", "notes", "birthdate", "baptism_date", "photo_url"}
     for k, v in data.items():
@@ -138,7 +171,11 @@ async def list_groups(db: DbSession, current_user: CurrentUser, public_only: boo
 async def add_group_member(
     group_id: int, payload: GroupMembershipCreate, db: DbSession, _: LeaderUser
 ):
-    membership = GroupMembership(group_id=group_id, **payload.model_dump())
+    membership = GroupMembership(
+        group_id=group_id,
+        member_id=payload.member_id,
+        role=payload.role,
+    )
     db.add(membership)
     await db.flush()
     return {"ok": True, "id": membership.id}
