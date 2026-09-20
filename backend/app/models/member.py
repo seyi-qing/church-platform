@@ -1,3 +1,4 @@
+# app/models/member.py
 from datetime import date, datetime
 
 from sqlalchemy import Date, DateTime, ForeignKey, String, Text, Boolean
@@ -31,7 +32,8 @@ class MemberProfile(Base):
     photo_url: Mapped[str | None] = mapped_column(String(500))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
-    user = relationship("User", back_populates="profile")
+    #  FIXED: back_populates changed from "profile" to "member_profile" to match user.py
+    user = relationship("User", back_populates="member_profile")
     family = relationship("Family", back_populates="members")
     group_memberships = relationship("GroupMembership", back_populates="member")
 
