@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { API_URL } from "@/lib/api";
+import { toYouTubeEmbedUrl } from "@/lib/youtube";
 
 type Livestream = {
   id: number;
@@ -12,29 +13,6 @@ type Livestream = {
   playback_url: string | null;
   youtube_url: string | null;
 };
-
-/** Convert watch / share / short YouTube URLs to embed form */
-function toEmbedUrl(url: string): string {
-  try {
-    const u = new URL(url);
-    if (u.hostname.includes("youtu.be")) {
-      const id = u.pathname.replace("/", "");
-      return `https://www.youtube.com/embed/${id}`;
-    }
-    if (u.hostname.includes("youtube.com")) {
-      if (u.pathname.startsWith("/embed/")) return url;
-      const v = u.searchParams.get("v");
-      if (v) return `https://www.youtube.com/embed/${v}`;
-      const parts = u.pathname.split("/").filter(Boolean);
-      if (parts[0] === "live" && parts[1]) {
-        return `https://www.youtube.com/embed/${parts[1]}`;
-      }
-    }
-  } catch {
-    /* ignore */
-  }
-  return url;
-}
 
 export default function LivePage() {
   const [live, setLive] = useState<Livestream | null>(null);
@@ -48,8 +26,7 @@ export default function LivePage() {
     })
       .then(async (r) => {
         if (!r.ok) return null;
-        const data = await r.json();
-        return data;
+        return r.json();
       })
       .then((d) => setLive(d))
       .catch(() => setLive(null))
@@ -58,9 +35,10 @@ export default function LivePage() {
   }, []);
 
   const embedSrc =
-    live?.youtube_url
-      ? toEmbedUrl(live.youtube_url)
-      : live?.playback_url || null;
+    toYouTubeEmbedUrl(live?.youtube_url) ||
+    toYouTubeEmbedUrl(live?.playback_url) ||
+    live?.playback_url ||
+    null;
 
   return (
     <div className="space-y-8">
