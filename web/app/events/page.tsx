@@ -1,7 +1,7 @@
-import { apiFetch } from "@/lib/api";
+"use client";
 
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
+import { useEffect, useState } from "react";
+import { API_URL } from "@/lib/api";
 
 type Event = {
   id: number;
@@ -12,16 +12,46 @@ type Event = {
   end_at: string | null;
 };
 
-async function getEvents(): Promise<Event[]> {
-  try {
-    return await apiFetch<Event[]>("/events?limit=20", { cache: "no-store" });
-  } catch {
-    return [];
-  }
-}
+export default function EventsPage() {
+  const [events, setEvents] = useState<Event[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-export default async function EventsPage() {
-  const events = await getEvents();
+  useEffect(() => {
+    let cancelled = false;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 90000);
+
+    fetch(`${API_URL}/events?limit=20`, {
+      signal: controller.signal,
+      cache: "no-store",
+    })
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`API ${res.status}`);
+        return res.json();
+      })
+      .then((data) => {
+        if (!cancelled) setEvents(Array.isArray(data) ? data : []);
+      })
+      .catch((e) => {
+        if (!cancelled) {
+          setError(
+            e.name === "AbortError"
+              ? "Server is waking up — pull to refresh in a moment."
+              : e.message || "Could not load events"
+          );
+        }
+      })
+      .finally(() => {
+        clearTimeout(timer);
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, []);
 
   return (
     <div className="space-y-8">
@@ -30,11 +60,25 @@ export default async function EventsPage() {
         <p className="mt-2 text-slate-600">Upcoming gatherings and opportunities.</p>
       </div>
 
-      {events.length === 0 ? (
+      {loading && (
+        <p className="rounded-lg border bg-white p-8 text-center text-slate-500">
+          Loading events… (first load may take up to a minute)
+        </p>
+      )}
+
+      {!loading && error && events.length === 0 && (
+        <p className="rounded-lg border border-amber-200 bg-amber-50 p-6 text-center text-amber-900">
+          {error}
+        </p>
+      )}
+
+      {!loading && !error && events.length === 0 && (
         <p className="rounded-lg border bg-white p-8 text-center text-slate-500">
           No upcoming events listed right now.
         </p>
-      ) : (
+      )}
+
+      {events.length > 0 && (
         <ul className="space-y-4">
           {events.map((e) => (
             <li key={e.id} className="rounded-xl border bg-white p-6 shadow-sm">
@@ -43,9 +87,7 @@ export default async function EventsPage() {
                 {new Date(e.start_at).toLocaleString()}
                 {e.location ? ` · ${e.location}` : ""}
               </p>
-              {e.description && (
-                <p className="mt-3 text-slate-600">{e.description}</p>
-              )}
+              {e.description && <p className="mt-3 text-slate-600">{e.description}</p>}
             </li>
           ))}
         </ul>
