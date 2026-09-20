@@ -8,7 +8,7 @@ from app.core.config import get_settings
 
 settings = get_settings()
 
-# Params Neon/libpq put in the URL that asyncpg does not accept
+# Params Neon/Render/libpq put in the URL that asyncpg does not accept
 _ASYNC_PG_STRIP = {
     "sslmode",
     "ssl",
@@ -20,7 +20,7 @@ _ASYNC_PG_STRIP = {
 
 
 def _normalize_database_url(url: str) -> tuple[str, dict]:
-    """Strip libpq query params asyncpg rejects; enable SSL for Neon and enforce asyncpg prefix."""
+    """Strip libpq query params asyncpg rejects; enable SSL for cloud databases and enforce asyncpg prefix."""
     connect_args: dict = {}
     if not url:
         return url, connect_args
@@ -28,8 +28,8 @@ def _normalize_database_url(url: str) -> tuple[str, dict]:
     parsed = urlparse(url)
     host = parsed.hostname or ""
 
-    # Always use TLS for Neon
-    if "neon.tech" in host:
+    # Always use TLS for cloud environments like Neon or Render
+    if "neon.tech" in host or "render.com" in host or "onrender.com" in host:
         connect_args["ssl"] = True
 
     # Drop unsupported query string entirely (safest for asyncpg)
@@ -46,13 +46,14 @@ def _normalize_database_url(url: str) -> tuple[str, dict]:
                     "true",
                     "1",
                 ):
+                    # Force SSL connection arguments if parameters require it
                     connect_args["ssl"] = True
                 qs.pop(key)
         new_query = urlencode({k: v[0] for k, v in qs.items()})
     else:
         new_query = ""
 
-    # 💡 FIX: Force the asyncpg driver protocol prefix if it is standard postgresql/postgres
+    # Force the asyncpg driver protocol prefix if it is standard postgresql/postgres
     scheme = parsed.scheme
     if scheme in ("postgresql", "postgres"):
         scheme = "postgresql+asyncpg"
