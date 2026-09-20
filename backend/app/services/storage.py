@@ -10,12 +10,16 @@ settings = get_settings()
 
 
 def storage_configured() -> bool:
-    return bool(
-        settings.S3_ACCESS_KEY
-        and settings.S3_SECRET_KEY
-        and settings.S3_BUCKET
-        and settings.S3_ENDPOINT
-    )
+    endpoint = (settings.S3_ENDPOINT or "").strip()
+    key = (settings.S3_ACCESS_KEY or "").strip()
+    secret = (settings.S3_SECRET_KEY or "").strip()
+    bucket = (settings.S3_BUCKET or "").strip()
+    if not (endpoint and key and secret and bucket):
+        return False
+    # Docker-compose defaults are not reachable on Render/Vercel
+    if "minio:9000" in endpoint or endpoint.startswith("http://minio"):
+        return False
+    return True
 
 
 def _client():
@@ -41,15 +45,14 @@ def public_url_for_key(key: str) -> str:
 def upload_bytes(data: bytes, filename: str, content_type: str) -> dict[str, Any]:
     if not storage_configured():
         raise RuntimeError(
-            "File storage is not configured. Set S3_ENDPOINT, S3_ACCESS_KEY, "
-            "S3_SECRET_KEY, S3_BUCKET on the API."
+            "File storage is not configured. Paste a YouTube or public file URL instead, "
+            "or set S3_ENDPOINT, S3_ACCESS_KEY, S3_SECRET_KEY, S3_BUCKET (e.g. Cloudflare R2)."
         )
     ext = ""
     if "." in filename:
         ext = "." + filename.rsplit(".", 1)[-1].lower()[:10]
     key = f"media/{uuid.uuid4().hex}{ext}"
     client = _client()
-    extra = {}
     try:
         client.put_object(
             Bucket=settings.S3_BUCKET,
@@ -59,7 +62,6 @@ def upload_bytes(data: bytes, filename: str, content_type: str) -> dict[str, Any
             ACL="public-read",
         )
     except Exception:
-        # Some providers (R2) reject ACL
         client.put_object(
             Bucket=settings.S3_BUCKET,
             Key=key,

@@ -1,5 +1,4 @@
 from functools import lru_cache
-from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -21,9 +20,10 @@ class Settings(BaseSettings):
     STRIPE_PUBLISHABLE_KEY: str = ""
     STRIPE_WEBHOOK_SECRET: str = ""
 
-    S3_ENDPOINT: str | None = "http://minio:9000"
-    S3_ACCESS_KEY: str | None = "minioadmin"
-    S3_SECRET_KEY: str | None = "minioadmin"
+    # Leave empty unless you configure real S3 / Cloudflare R2 / MinIO
+    S3_ENDPOINT: str | None = None
+    S3_ACCESS_KEY: str | None = None
+    S3_SECRET_KEY: str | None = None
     S3_BUCKET: str = "church-media"
     S3_REGION: str = "us-east-1"
 
@@ -35,32 +35,14 @@ class Settings(BaseSettings):
     VAPID_PRIVATE_KEY: str | None = None
     VAPID_CONTACT_EMAIL: str = "mailto:admin@example.com"
 
-    BACKEND_CORS_ORIGINS: list[str] = ["http://localhost:3000", "http://localhost:8081"]
-
-    # This validator automatically intercepts and cleans your database URLs
-    @field_validator("DATABASE_URL", "DATABASE_URL_SYNC", mode="before")
-    @classmethod
-    def clean_database_url(cls, v: str) -> str:
-        if not v:
-            return v
-        
-        # Clean the async database driver URL
-        if "DATABASE_URL" in cls.__fields__ and "asyncpg" not in v:
-            if v.startswith("postgres://"):
-                v = v.replace("postgres://", "postgresql+asyncpg://", 1)
-            elif v.startswith("postgresql://"):
-                v = v.replace("postgresql://", "postgresql+asyncpg://", 1)
-
-        # Remove the breaking 'sslmode' query parameter that crashes asyncpg
-        if "?sslmode=" in v:
-            v = v.split("?sslmode=")[0]
-        elif "&sslmode=" in v:
-            v = v.split("&sslmode=")[0]
-            
-        return v
+    BACKEND_CORS_ORIGINS: list[str] = [
+        "http://localhost:3000",
+        "http://localhost:8081",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:8081",
+    ]
 
 
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
-                              
