@@ -1,9 +1,9 @@
 from datetime import datetime
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, File, HTTPException, UploadFile, status
 from sqlalchemy import select
 
-from app.api.deps import DbSession, LeaderUser
+from app.api.deps import LeaderUser, DbSession
 from app.models.media import MediaItem, Series
 from app.schemas.media import MediaItemCreate, MediaItemOut, SeriesCreate, SeriesOut
 
@@ -68,8 +68,6 @@ async def get_media_item(item_id: int, db: DbSession):
     item = result.scalar_one_or_none()
     if not item:
         raise HTTPException(status_code=404, detail="Media item not found")
-    item.view_count += 1
-    await db.flush()
     return item
 
 
@@ -84,3 +82,33 @@ async def publish_media_item(item_id: int, db: DbSession, _: LeaderUser):
     await db.flush()
     await db.refresh(item)
     return item
+
+
+@router.post("/upload")
+async def upload_media_file(
+    _: LeaderUser,
+    file: UploadFile = File(...),
+):
+    from app.services import storage as storage_service
+
+    if not storage_service.storage_configured():
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "File storage not configured. Set S3_ENDPOINT, S3_ACCESS_KEY, "
+                "S3_SECRET_KEY, S3_BUCKET (Cloudflare R2 works). "
+                "Or paste a YouTube/public file URL when creating media."
+            ),
+        )
+    raw = await file.read()
+    if len(raw) > 200 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="File too large (max 200MB)")
+    try:
+        result = storage_service.upload_bytes(
+            raw,
+            file.filename or "upload.bin",
+            file.content_type or "application/octet-stream",
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+    return result
