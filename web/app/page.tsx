@@ -2,18 +2,18 @@ import Link from "next/link";
 
 export default function HomePage() {
   return (
-    <div className="space-y-16">
-      <section className="rounded-2xl bg-gradient-to-br from-brand-700 to-brand-900 px-8 py-20 text-white shadow-lg">
-        <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">
+    <div className="space-y-12">
+      <section className="rounded-2xl bg-blue-700 px-6 py-12 text-white shadow-lg sm:px-10 sm:py-16">
+        <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
           Welcome to Grace Church
         </h1>
-        <p className="mt-4 max-w-xl text-lg text-brand-100">
+        <p className="mt-4 max-w-xl text-lg text-blue-100">
           A community following Jesus together. Join us this Sunday or watch live online.
         </p>
         <div className="mt-8 flex flex-wrap gap-4">
           <Link
             href="/live"
-            className="rounded-lg bg-white px-6 py-3 font-semibold text-brand-800 shadow hover:bg-brand-50"
+            className="rounded-lg bg-white px-6 py-3 font-semibold text-blue-800 shadow hover:bg-blue-50"
           >
             Watch Live
           </Link>
@@ -26,7 +26,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="grid gap-8 sm:grid-cols-3">
+      <section className="grid gap-6 sm:grid-cols-3">
         <FeatureCard
           title="Sermons"
           description="Catch up on recent messages and series anytime."
