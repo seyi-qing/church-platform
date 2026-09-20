@@ -71,7 +71,6 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Latest sermons */}
       <section>
         <div className="mb-4 flex items-end justify-between gap-4">
           <div>
@@ -91,7 +90,7 @@ export default function HomePage() {
             {sermons.map((s) => (
               <Link
                 key={s.id}
-                href={`/sermons#sermon-${s.id}`}
+                href="/sermons"
                 className="rounded-xl border bg-white p-5 shadow-sm transition hover:shadow-md"
               >
                 <div className="mb-3 flex h-24 items-center justify-center rounded-lg bg-slate-100 text-sm text-slate-400">
@@ -108,7 +107,6 @@ export default function HomePage() {
         )}
       </section>
 
-      {/* Upcoming events */}
       <section>
         <div className="mb-4 flex items-end justify-between gap-4">
           <div>
@@ -139,21 +137,6 @@ export default function HomePage() {
             ))}
           </ul>
         )}
-      </section>
-
-      <section className="grid gap-6 sm:grid-cols-3">
-        <Link href="/sermons" className="rounded-xl border bg-white p-6 shadow-sm hover:shadow-md">
-          <h2 className="text-lg font-semibold">Sermons</h2>
-          <p className="mt-2 text-sm text-slate-600">Catch up on recent messages and series anytime.</p>
-        </Link>
-        <Link href="/events" className="rounded-xl border bg-white p-6 shadow-sm hover:shadow-md">
-          <h2 className="text-lg font-semibold">Events</h2>
-          <p className="mt-2 text-sm text-slate-600">Find gatherings, classes, and ways to get involved.</p>
-        </Link>
-        <Link href="/give" className="rounded-xl border bg-white p-6 shadow-sm hover:shadow-md">
-          <h2 className="text-lg font-semibold">Give</h2>
-          <p className="mt-2 text-sm text-slate-600">Support the mission with secure online giving.</p>
-        </Link>
       </section>
     </div>
   );
