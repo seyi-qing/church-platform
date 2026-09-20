@@ -4,10 +4,12 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 
-function setAuth(access: string, refresh: string, user: object) {
+function setAuth(access: string, refresh: string, user: object | null = null) {
   localStorage.setItem("access_token", access);
   localStorage.setItem("refresh_token", refresh);
-  localStorage.setItem("user", JSON.stringify(user));
+  if (user) {
+    localStorage.setItem("user", JSON.stringify(user));
+  }
 }
 
 export default function AdminLoginPage() {
@@ -22,19 +24,33 @@ export default function AdminLoginPage() {
     setError("");
     setLoading(true);
     try {
+      // 1. Fetch token pairs
       const tokens = await apiFetch<{ access_token: string; refresh_token: string }>(
         "/auth/login/json",
         { method: "POST", body: JSON.stringify({ email, password }) }
       );
+
+      // 💡 FIXED: Save access keys into storage FIRST so apiFetch("/auth/me") reads them
+      setAuth(tokens.access_token, tokens.refresh_token);
+
+      // 2. Safely call backend profile endpoint with the token populated in storage
       const user = await apiFetch<any>("/auth/me");
       if (!["admin", "pastor", "leader"].includes(user.role) && !user.is_superuser) {
         setError("You do not have staff access.");
+        // Clean out unauthorized storage items
+        localStorage.clear();
         setLoading(false);
         return;
       }
-      setAuth(tokens.access_token, tokens.refresh_token, user);
+
+      // 3. Update storage to record the profile payload
+      localStorage.setItem("user", JSON.stringify(user));
+      
+      // 4. Redirect safely to dashboard panels
       router.replace("/admin");
     } catch (err: any) {
+      // Clean out any partial tokens on failure
+      localStorage.clear();
       setError(err.message || "Login failed");
     } finally {
       setLoading(false);
@@ -63,4 +79,4 @@ export default function AdminLoginPage() {
       </form>
     </div>
   );
-}
+            }
