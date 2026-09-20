@@ -23,61 +23,87 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const pathname = usePathname();
   const router = useRouter();
   const [ready, setReady] = useState(false);
+  const [user, setUser] = useState<any>(null);
 
-  // 💡 FIX 1: Run token validation ONLY ONCE when the dashboard components mount
+  // 💡 Check authentication strictly ONCE when the administrative frame mounts
   useEffect(() => {
     if (typeof window !== "undefined") {
       const token = getToken();
+      const storedUser = localStorage.getItem("user");
+
       if (!token && window.location.pathname !== "/admin/login") {
         router.replace("/admin/login");
       } else {
+        if (storedUser) {
+          try {
+            setUser(JSON.parse(storedUser));
+          } catch (e) {
+            console.error(e);
+          }
+        }
         setReady(true);
       }
     }
   }, [router]);
 
   if (pathname === "/admin/login") return <>{children}</>;
-  if (!ready) return <div className="p-8 text-slate-500">Loading…</div>;
+  if (!ready) return <div className="p-8 text-slate-500 font-medium">Loading panel workspace...</div>;
 
   return (
-    <div className="flex min-h-screen">
-      <aside className="w-56 shrink-0 border-r bg-slate-900 text-slate-100">
-        <div className="p-4 text-sm font-bold tracking-wide text-white">Admin</div>
-        <nav className="space-y-0.5 px-2 pb-4">
-          {nav.map((item) => {
-            // 💡 FIX 2: Handle matching sub-routes accurately (e.g. matching /admin/media/1)
-            const isActive =
-              item.href === "/admin"
-                ? pathname === "/admin"
-                : pathname.startsWith(item.href);
+    <div className="flex min-h-screen bg-slate-50">
+      {/* Persistent Administrative Sidebar */}
+      <aside className="w-56 shrink-0 border-r bg-slate-900 text-slate-100 flex flex-col justify-between">
+        <div>
+          <div className="p-4 border-b border-slate-800">
+            <div className="text-sm font-bold tracking-wide text-white">Church Admin</div>
+            {/* 💡 Display user profile name seamlessly inside the sidebar header */}
+            {user && (
+              <p className="text-xs text-slate-400 mt-1 truncate">
+                {user.full_name || user.email}
+              </p>
+            )}
+          </div>
+          <nav className="space-y-0.5 px-2 mt-4">
+            {nav.map((item) => {
+              const isActive =
+                item.href === "/admin"
+                  ? pathname === "/admin"
+                  : pathname.startsWith(item.href);
 
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`block rounded-lg px-3 py-2 text-sm ${
-                  isActive
-                    ? "bg-brand-600 text-white"
-                    : "text-slate-300 hover:bg-slate-800"
-                }`}
-              >
-                {item.label}
-              </Link>
-            );
-          })}
-        </nav>
-        <button
-          type="button"
-          onClick={() => {
-            logout();
-            router.push("/admin/login");
-          }}
-          className="mx-2 mb-4 block w-[calc(100%-1rem)] rounded-lg px-3 py-2 text-left text-sm text-slate-400 hover:bg-slate-800"
-        >
-          Sign out
-        </button>
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`block rounded-lg px-3 py-2 text-sm font-medium transition ${
+                    isActive
+                      ? "bg-brand-600 text-white"
+                      : "text-slate-300 hover:bg-slate-800"
+                  }`}
+                >
+                  {item.label}
+                </Link>
+              );
+            })}
+          </nav>
+        </div>
+        
+        <div className="p-2 border-t border-slate-800">
+          <button
+            type="button"
+            onClick={() => {
+              logout();
+              localStorage.clear();
+              router.push("/admin/login");
+            }}
+            className="w-full rounded-lg px-3 py-2 text-left text-sm text-slate-400 hover:bg-slate-800 font-medium transition"
+          >
+            Sign out
+          </button>
+        </div>
       </aside>
-      <div className="flex-1 overflow-auto p-6">{children}</div>
+
+      {/* Primary Page Canvas */}
+      <div className="flex-1 overflow-auto p-8">{children}</div>
     </div>
   );
-  }
+    }
