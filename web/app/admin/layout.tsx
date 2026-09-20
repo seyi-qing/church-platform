@@ -24,17 +24,17 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const router = useRouter();
   const [ready, setReady] = useState(false);
 
+  // 💡 FIX 1: Run token validation ONLY ONCE when the dashboard components mount
   useEffect(() => {
-    if (pathname === "/admin/login") {
-      setReady(true);
-      return;
+    if (typeof window !== "undefined") {
+      const token = getToken();
+      if (!token && window.location.pathname !== "/admin/login") {
+        router.replace("/admin/login");
+      } else {
+        setReady(true);
+      }
     }
-    if (!getToken()) {
-      router.replace("/admin/login");
-    } else {
-      setReady(true);
-    }
-  }, [pathname, router]);
+  }, [router]);
 
   if (pathname === "/admin/login") return <>{children}</>;
   if (!ready) return <div className="p-8 text-slate-500">Loading…</div>;
@@ -44,19 +44,27 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       <aside className="w-56 shrink-0 border-r bg-slate-900 text-slate-100">
         <div className="p-4 text-sm font-bold tracking-wide text-white">Admin</div>
         <nav className="space-y-0.5 px-2 pb-4">
-          {nav.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`block rounded-lg px-3 py-2 text-sm ${
-                pathname === item.href
-                  ? "bg-brand-600 text-white"
-                  : "text-slate-300 hover:bg-slate-800"
-              }`}
-            >
-              {item.label}
-            </Link>
-          ))}
+          {nav.map((item) => {
+            // 💡 FIX 2: Handle matching sub-routes accurately (e.g. matching /admin/media/1)
+            const isActive =
+              item.href === "/admin"
+                ? pathname === "/admin"
+                : pathname.startsWith(item.href);
+
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`block rounded-lg px-3 py-2 text-sm ${
+                  isActive
+                    ? "bg-brand-600 text-white"
+                    : "text-slate-300 hover:bg-slate-800"
+                }`}
+              >
+                {item.label}
+              </Link>
+            );
+          })}
         </nav>
         <button
           type="button"
@@ -72,4 +80,4 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       <div className="flex-1 overflow-auto p-6">{children}</div>
     </div>
   );
-}
+  }
