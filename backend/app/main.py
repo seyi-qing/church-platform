@@ -82,7 +82,7 @@ app = FastAPI(
 trusted_origins = [
     "http://localhost:3000",
     "http://localhost:8081",
-    "https://church-platform-mu.vercel.app/",  # Your frontend application on Vercel
+    "https://church-platform-mu.vercel.app",  # Your frontend application on Vercel
 ]
 
 app.add_middleware(
