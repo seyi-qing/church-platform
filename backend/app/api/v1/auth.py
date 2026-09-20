@@ -58,7 +58,7 @@ async def login_form(response: Response, db: DbSession, form_data: OAuth2Passwor
         value=f"Bearer {access_token}",
         httponly=True,
         max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-        samesite="lax",
+        samesite="none",
         secure=True,
     )
 
@@ -86,7 +86,7 @@ async def login_json(payload: LoginRequest, db: DbSession, response: Response):
         value=f"Bearer {access_token}",
         httponly=True,
         max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-        samesite="lax",
+        samesite="none",
         secure=True,
     )
 
