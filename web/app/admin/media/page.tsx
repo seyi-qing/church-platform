@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { apiFetch, API_URL } from "@/lib/api";
-import { getAccessToken } from "@/lib/auth";
+import { apiFetch } from "@/lib/api";
 
 type MediaItem = {
   id: number;
@@ -12,8 +11,6 @@ type MediaItem = {
   video_url?: string | null;
   audio_url?: string | null;
   is_published: boolean;
-  published_at: string | null;
-  view_count: number;
 };
 
 export default function AdminMediaPage() {
@@ -32,7 +29,6 @@ export default function AdminMediaPage() {
     is_published: true,
   });
   const [saving, setSaving] = useState(false);
-  const [uploading, setUploading] = useState(false);
 
   function load() {
     setLoading(true);
@@ -45,31 +41,6 @@ export default function AdminMediaPage() {
   useEffect(() => {
     load();
   }, []);
-
-  async function uploadFile(file: File, kind: "video" | "audio") {
-    setUploading(true);
-    setError("");
-    try {
-      const body = new FormData();
-      body.append("file", file);
-      const token = getAccessToken();
-      const res = await fetch(`${API_URL}/media/upload`, {
-        method: "POST",
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-        body,
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        throw new Error(data.detail || "Upload failed — use a URL instead, or configure S3/R2");
-      }
-      if (kind === "video") setForm((f) => ({ ...f, video_url: data.url }));
-      else setForm((f) => ({ ...f, audio_url: data.url }));
-    } catch (e: any) {
-      setError(e.message);
-    } finally {
-      setUploading(false);
-    }
-  }
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -123,7 +94,7 @@ export default function AdminMediaPage() {
         <div>
           <h1 className="text-2xl font-bold">Media / Playlists</h1>
           <p className="mt-1 text-sm text-slate-500">
-            Add sermons with YouTube or file URLs. Optional direct upload if S3/R2 is configured.
+            Add sermons with a YouTube or public media URL. File upload needs S3/R2 (optional later).
           </p>
         </div>
         <button
@@ -178,44 +149,23 @@ export default function AdminMediaPage() {
             onChange={(e) => setForm({ ...form, description: e.target.value })}
           />
           <label className="block text-sm">
-            <span className="font-medium text-slate-700">Video URL (YouTube or direct MP4)</span>
+            <span className="font-medium text-slate-700">Video URL (YouTube recommended)</span>
             <input
               className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
-              placeholder="https://youtube.com/watch?v=… or https://….mp4"
+              placeholder="https://youtube.com/watch?v=… or /shorts/…"
               value={form.video_url}
               onChange={(e) => setForm({ ...form, video_url: e.target.value })}
             />
-            <input
-              type="file"
-              accept="video/*"
-              className="mt-2 text-xs"
-              disabled={uploading}
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) uploadFile(f, "video");
-              }}
-            />
           </label>
           <label className="block text-sm">
-            <span className="font-medium text-slate-700">Audio URL (MP3 / podcast)</span>
+            <span className="font-medium text-slate-700">Audio URL (optional MP3)</span>
             <input
               className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
               placeholder="https://….mp3"
               value={form.audio_url}
               onChange={(e) => setForm({ ...form, audio_url: e.target.value })}
             />
-            <input
-              type="file"
-              accept="audio/*"
-              className="mt-2 text-xs"
-              disabled={uploading}
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) uploadFile(f, "audio");
-              }}
-            />
           </label>
-          {uploading && <p className="text-sm text-slate-500">Uploading…</p>}
           <label className="flex items-center gap-2 text-sm">
             <input
               type="checkbox"

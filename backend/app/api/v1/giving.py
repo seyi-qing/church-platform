@@ -24,15 +24,15 @@ async def create_donation_intent(
     db: DbSession,
     current_user: OptionalUser,
 ):
-    """One-time gift. Logged-in users are linked for history."""
+    """One-time gift. If logged in, ties donation to the user account."""
     if not settings.STRIPE_SECRET_KEY:
         donation = Donation(
             user_id=current_user.id if current_user else None,
             amount_cents=payload.amount_cents,
             fund=payload.fund,
-            stripe_payment_intent_id=f"demo_{payload.amount_cents}",
+            stripe_payment_intent_id=f"demo_{payload.amount_cents}_{id(payload)}",
             status="succeeded",
-            is_recurring=payload.is_recurring,
+            is_recurring=False,
             donor_email=payload.donor_email
             or (current_user.email if current_user else None),
             donor_name=payload.donor_name
@@ -42,7 +42,8 @@ async def create_donation_intent(
         await db.flush()
         await db.refresh(donation)
         return DonationIntentResponse(
-            client_secret="demo_secret", donation_id=donation.id
+            client_secret="demo_secret",
+            donation_id=donation.id,
         )
 
     try:
@@ -66,7 +67,7 @@ async def create_donation_intent(
         fund=payload.fund,
         stripe_payment_intent_id=intent.id,
         status="pending",
-        is_recurring=payload.is_recurring,
+        is_recurring=False,
         donor_email=payload.donor_email
         or (current_user.email if current_user else None),
         donor_name=payload.donor_name
@@ -91,6 +92,39 @@ async def my_donations(db: DbSession, current_user: CurrentUser, limit: int = 50
     return result.scalars().all()
 
 
+@router.get("/history", response_model=list[DonationOut])
+@router.get("/admin/all", response_model=list[DonationOut])
+async def donation_history(db: DbSession, _: AdminUser, limit: int = 50):
+    result = await db.execute(
+        select(Donation).order_by(Donation.created_at.desc()).limit(limit)
+    )
+    return result.scalars().all()
+
+
+@router.get("/receipt/{donation_id}")
+async def donation_receipt(
+    donation_id: int, db: DbSession, current_user: CurrentUser
+):
+    result = await db.execute(select(Donation).where(Donation.id == donation_id))
+    donation = result.scalar_one_or_none()
+    if not donation:
+        raise HTTPException(status_code=404, detail="Donation not found")
+    is_staff = current_user.role in ("admin", "pastor") or current_user.is_superuser
+    if donation.user_id != current_user.id and not is_staff:
+        raise HTTPException(status_code=403, detail="Not allowed")
+    return {
+        "id": donation.id,
+        "amount_cents": donation.amount_cents,
+        "amount_display": f"${donation.amount_cents / 100:.2f}",
+        "fund": donation.fund,
+        "status": donation.status,
+        "donor_name": donation.donor_name,
+        "donor_email": donation.donor_email,
+        "created_at": donation.created_at,
+        "receipt_note": "Thank you for your gift to the church.",
+    }
+
+
 @router.post("/webhook")
 async def stripe_webhook(request: Request, db: DbSession):
     payload = await request.body()
@@ -104,24 +138,50 @@ async def stripe_webhook(request: Request, db: DbSession):
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
-    if event["type"] == "payment_intent.succeeded":
-        pi = event["data"]["object"]
+    etype = event["type"]
+    obj = event["data"]["object"]
+
+    if etype == "payment_intent.succeeded":
         result = await db.execute(
-            select(Donation).where(Donation.stripe_payment_intent_id == pi["id"])
+            select(Donation).where(Donation.stripe_payment_intent_id == obj["id"])
         )
         donation = result.scalar_one_or_none()
         if donation:
             donation.status = "succeeded"
             await db.flush()
+
+    elif etype == "checkout.session.completed":
+        if obj.get("mode") == "subscription":
+            user_id = (obj.get("metadata") or {}).get("user_id")
+            fund = (obj.get("metadata") or {}).get("fund") or "General"
+            sub_id = obj.get("subscription")
+            if user_id and sub_id:
+                result = await db.execute(
+                    select(RecurringDonation).where(
+                        RecurringDonation.user_id == int(user_id),
+                        RecurringDonation.status == "pending",
+                    )
+                )
+                rec = result.scalars().first()
+                if rec:
+                    rec.status = "active"
+                    rec.stripe_subscription_id = sub_id
+                    await db.flush()
+
+    elif etype in ("customer.subscription.deleted", "customer.subscription.updated"):
+        sub_id = obj.get("id")
+        if sub_id:
+            result = await db.execute(
+                select(RecurringDonation).where(
+                    RecurringDonation.stripe_subscription_id == sub_id
+                )
+            )
+            rec = result.scalar_one_or_none()
+            if rec:
+                rec.status = "canceled" if etype.endswith("deleted") else obj.get("status", rec.status)
+                await db.flush()
+
     return {"received": True}
-
-
-@router.get("/history", response_model=list[DonationOut])
-async def donation_history(db: DbSession, _: AdminUser, limit: int = 50):
-    result = await db.execute(
-        select(Donation).order_by(Donation.created_at.desc()).limit(limit)
-    )
-    return result.scalars().all()
 
 
 @router.post("/recurring/checkout")
@@ -129,7 +189,25 @@ async def create_recurring_checkout(
     payload: RecurringDonationCreate, db: DbSession, current_user: CurrentUser
 ):
     if not settings.STRIPE_SECRET_KEY:
-        raise HTTPException(status_code=503, detail="Stripe is not configured")
+        # Demo: record active recurring without Stripe
+        rec = RecurringDonation(
+            user_id=current_user.id,
+            amount_cents=payload.amount_cents,
+            fund=payload.fund,
+            interval=payload.interval if payload.interval in ("week", "month", "year") else "month",
+            status="active",
+            stripe_subscription_id=f"demo_sub_{current_user.id}",
+        )
+        db.add(rec)
+        await db.flush()
+        await db.refresh(rec)
+        return {
+            "url": None,
+            "recurring_id": rec.id,
+            "demo": True,
+            "message": "Recurring gift recorded in demo mode (no Stripe).",
+        }
+
     interval = (
         payload.interval if payload.interval in ("week", "month", "year") else "month"
     )
@@ -140,21 +218,23 @@ async def create_recurring_checkout(
             recurring={"interval": interval},
             product_data={"name": f"Recurring gift – {payload.fund}"},
         )
-        origin = (
-            settings.BACKEND_CORS_ORIGINS[0]
-            if settings.BACKEND_CORS_ORIGINS
-            else "http://localhost:3000"
+        origins = settings.BACKEND_CORS_ORIGINS or ["http://localhost:3000"]
+        # Prefer Vercel app origin if present
+        origin = next(
+            (o for o in origins if "vercel" in o),
+            origins[0],
         )
         session = stripe.checkout.Session.create(
             mode="subscription",
             line_items=[{"price": price.id, "quantity": 1}],
-            success_url=origin + "/give?recurring=success",
-            cancel_url=origin + "/give?recurring=cancel",
+            success_url=origin.rstrip("/") + "/give?recurring=success",
+            cancel_url=origin.rstrip("/") + "/give?recurring=cancel",
             customer_email=current_user.email,
             metadata={"user_id": str(current_user.id), "fund": payload.fund},
         )
     except stripe.error.StripeError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
+
     rec = RecurringDonation(
         user_id=current_user.id,
         amount_cents=payload.amount_cents,
