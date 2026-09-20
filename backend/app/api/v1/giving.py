@@ -2,7 +2,7 @@ import stripe
 from fastapi import APIRouter, HTTPException, Request, status
 from sqlalchemy import select
 
-from app.api.deps import CurrentUser, DbSession, AdminUser
+from app.api.deps import CurrentUser, OptionalUser, DbSession, AdminUser
 from app.core.config import get_settings
 from app.models.giving import Donation, RecurringDonation
 from app.schemas.giving import (
@@ -19,29 +19,58 @@ if settings.STRIPE_SECRET_KEY:
 
 
 @router.post("/intent", response_model=DonationIntentResponse)
-async def create_donation_intent(payload: DonationCreate, db: DbSession):
+async def create_donation_intent(
+    payload: DonationCreate,
+    db: DbSession,
+    current_user: OptionalUser,
+):
+    """One-time gift. Logged-in users are linked for history."""
     if not settings.STRIPE_SECRET_KEY:
-        raise HTTPException(status_code=503, detail="Stripe is not configured")
+        donation = Donation(
+            user_id=current_user.id if current_user else None,
+            amount_cents=payload.amount_cents,
+            fund=payload.fund,
+            stripe_payment_intent_id=f"demo_{payload.amount_cents}",
+            status="succeeded",
+            is_recurring=payload.is_recurring,
+            donor_email=payload.donor_email
+            or (current_user.email if current_user else None),
+            donor_name=payload.donor_name
+            or (current_user.full_name if current_user else None),
+        )
+        db.add(donation)
+        await db.flush()
+        await db.refresh(donation)
+        return DonationIntentResponse(
+            client_secret="demo_secret", donation_id=donation.id
+        )
+
     try:
         intent = stripe.PaymentIntent.create(
             amount=payload.amount_cents,
             currency="usd",
-            metadata={"fund": payload.fund},
+            metadata={
+                "fund": payload.fund,
+                "user_id": str(current_user.id) if current_user else "",
+            },
             automatic_payment_methods={"enabled": True},
-            receipt_email=payload.donor_email,
+            receipt_email=payload.donor_email
+            or (current_user.email if current_user else None),
         )
     except stripe.error.StripeError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
     donation = Donation(
-        user_id=None,
+        user_id=current_user.id if current_user else None,
         amount_cents=payload.amount_cents,
         fund=payload.fund,
         stripe_payment_intent_id=intent.id,
         status="pending",
         is_recurring=payload.is_recurring,
-        donor_email=payload.donor_email,
-        donor_name=payload.donor_name,
+        donor_email=payload.donor_email
+        or (current_user.email if current_user else None),
+        donor_name=payload.donor_name
+        or (current_user.full_name if current_user else None),
     )
     db.add(donation)
     await db.flush()
@@ -49,6 +78,17 @@ async def create_donation_intent(payload: DonationCreate, db: DbSession):
     return DonationIntentResponse(
         client_secret=intent.client_secret, donation_id=donation.id
     )
+
+
+@router.get("/mine", response_model=list[DonationOut])
+async def my_donations(db: DbSession, current_user: CurrentUser, limit: int = 50):
+    result = await db.execute(
+        select(Donation)
+        .where(Donation.user_id == current_user.id)
+        .order_by(Donation.created_at.desc())
+        .limit(limit)
+    )
+    return result.scalars().all()
 
 
 @router.post("/webhook")
