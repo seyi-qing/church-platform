@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { API_URL } from "@/lib/api";
 import { BRAND } from "@/lib/brand";
+import { MediaThumb } from "@/components/MediaThumb";
 
 type MediaItem = {
   id: number;
@@ -13,6 +14,7 @@ type MediaItem = {
   media_type: string;
   video_url?: string | null;
   audio_url?: string | null;
+  thumbnail_url?: string | null;
 };
 
 type EventItem = {
@@ -248,31 +250,28 @@ export default function HomePage() {
           </p>
         ) : (
           <div className="grid gap-4 sm:grid-cols-3">
-            {sermons.slice(0, 3).map((s) => {
-              const kind = s.video_url
-                ? "Video"
-                : s.audio_url
-                  ? "Audio"
-                  : s.media_type === "video"
-                    ? "Video"
-                    : "Message";
-              return (
-                <Link
-                  key={s.id}
-                  href="/sermons"
-                  className="rounded-xl border bg-white p-5 shadow-sm transition hover:shadow-md"
-                >
-                  <div className="mb-3 flex h-24 items-center justify-center rounded-lg bg-brand-50 text-sm font-semibold text-brand-700">
-                    {kind}
-                  </div>
+            {sermons.slice(0, 3).map((s) => (
+              <Link
+                key={s.id}
+                href="/sermons"
+                className="overflow-hidden rounded-xl border bg-white shadow-sm transition hover:shadow-md"
+              >
+                <MediaThumb
+                  title={s.title}
+                  thumbnail_url={s.thumbnail_url}
+                  video_url={s.video_url}
+                  media_type={s.media_type}
+                  hasAudio={!!s.audio_url}
+                />
+                <div className="p-4">
                   <h3 className="font-semibold text-slate-900">{s.title}</h3>
                   {s.speaker && <p className="mt-1 text-sm text-slate-500">{s.speaker}</p>}
                   {s.description && (
                     <p className="mt-2 line-clamp-2 text-sm text-slate-600">{s.description}</p>
                   )}
-                </Link>
-              );
-            })}
+                </div>
+              </Link>
+            ))}
           </div>
         )}
       </section>

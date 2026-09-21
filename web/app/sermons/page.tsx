@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { API_URL } from "@/lib/api";
 import { toYouTubeEmbedUrl } from "@/lib/youtube";
+import { MediaThumb } from "@/components/MediaThumb";
 
 type MediaItem = {
   id: number;
@@ -49,7 +50,6 @@ export default function SermonsPage() {
   useEffect(() => {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 90000);
-    // All published media — not only media_type=sermon
     fetch(`${API_URL}/media/items?published_only=true&limit=50`, {
       signal: controller.signal,
       cache: "no-store",
@@ -191,21 +191,30 @@ export default function SermonsPage() {
       )}
 
       {filtered.length > 0 && (
-        <ul className="divide-y rounded-xl border bg-white">
+        <ul className="grid gap-3 sm:grid-cols-2">
           {filtered.map((s) => (
             <li key={s.id}>
               <button
                 type="button"
                 onClick={() => setActiveId(s.id)}
-                className={`flex w-full items-start justify-between gap-3 px-4 py-3 text-left hover:bg-slate-50 ${
-                  activeId === s.id ? "bg-blue-50" : ""
+                className={`w-full overflow-hidden rounded-xl border bg-white text-left shadow-sm transition hover:shadow-md ${
+                  activeId === s.id ? "ring-2 ring-blue-500" : ""
                 }`}
               >
-                <div>
-                  <p className="font-medium text-slate-900">{s.title}</p>
-                  <p className="mt-1 text-xs text-slate-500">{s.speaker || "Grace Church"}</p>
+                <MediaThumb
+                  title={s.title}
+                  thumbnail_url={s.thumbnail_url}
+                  video_url={s.video_url}
+                  media_type={s.media_type}
+                  hasAudio={!!s.audio_url}
+                />
+                <div className="flex items-start justify-between gap-2 p-3">
+                  <div className="min-w-0">
+                    <p className="font-medium text-slate-900">{s.title}</p>
+                    <p className="mt-0.5 text-xs text-slate-500">{s.speaker || "Grace Church"}</p>
+                  </div>
+                  <TypeBadge type={s.media_type} hasVideo={!!s.video_url} hasAudio={!!s.audio_url} />
                 </div>
-                <TypeBadge type={s.media_type} hasVideo={!!s.video_url} hasAudio={!!s.audio_url} />
               </button>
             </li>
           ))}
