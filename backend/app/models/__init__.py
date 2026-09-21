@@ -9,3 +9,4 @@ from app.models.notification import PushDevice, NotificationLog
 from app.models.campus import Campus
 from app.models.care import CareRequest, CareNote, CareFollowUp
 from app.models.ops import Announcement, Expense
+from app.models.gallery import GalleryPhoto
