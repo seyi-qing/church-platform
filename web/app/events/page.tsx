@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { API_URL } from "@/lib/api";
+import { getAccessToken, getStoredUser, isLoggedIn } from "@/lib/auth";
 
 type Event = {
   id: number;
@@ -16,8 +17,17 @@ export default function EventsPage() {
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [rsvpId, setRsvpId] = useState<number | null>(null);
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [msg, setMsg] = useState("");
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
+    const u = getStoredUser<{ full_name?: string; email?: string }>();
+    if (u?.full_name) setName(u.full_name);
+    if (u?.email) setEmail(u.email);
+
     let cancelled = false;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 90000);
@@ -53,26 +63,57 @@ export default function EventsPage() {
     };
   }, []);
 
+  async function submitRsvp(eventId: number) {
+    setBusy(true);
+    setMsg("");
+    setError("");
+    try {
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      const token = getAccessToken();
+      if (token) headers.Authorization = `Bearer ${token}`;
+
+      const res = await fetch(`${API_URL}/events/${eventId}/rsvp`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          name: name.trim() || "Guest",
+          email: email.trim() || "guest@example.com",
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || `RSVP failed (${res.status})`);
+      setMsg(data.message || "You're registered!");
+      setRsvpId(null);
+    } catch (e: any) {
+      setError(typeof e.message === "string" ? e.message : "RSVP failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="space-y-8">
       <div>
         <h1 className="text-3xl font-bold">Events</h1>
-        <p className="mt-2 text-slate-600">Upcoming gatherings and opportunities.</p>
+        <p className="mt-2 text-slate-600">Upcoming gatherings — RSVP in one tap.</p>
       </div>
 
-      {loading && (
-        <p className="rounded-lg border bg-white p-8 text-center text-slate-500">
-          Loading events… (first load may take up to a minute)
+      {msg && (
+        <p className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+          {msg}
         </p>
       )}
-
-      {!loading && error && events.length === 0 && (
-        <p className="rounded-lg border border-amber-200 bg-amber-50 p-6 text-center text-amber-900">
+      {error && (
+        <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
           {error}
         </p>
       )}
 
-      {!loading && !error && events.length === 0 && (
+      {loading && (
+        <p className="rounded-lg border bg-white p-8 text-center text-slate-500">Loading events…</p>
+      )}
+
+      {!loading && events.length === 0 && !error && (
         <p className="rounded-lg border bg-white p-8 text-center text-slate-500">
           No upcoming events listed right now.
         </p>
@@ -88,6 +129,64 @@ export default function EventsPage() {
                 {e.location ? ` · ${e.location}` : ""}
               </p>
               {e.description && <p className="mt-3 text-slate-600">{e.description}</p>}
+
+              {rsvpId === e.id ? (
+                <div className="mt-4 space-y-2 rounded-lg border border-slate-100 bg-slate-50 p-3">
+                  {!isLoggedIn() && (
+                    <>
+                      <input
+                        required
+                        placeholder="Your name"
+                        className="w-full rounded-lg border px-3 py-2 text-sm"
+                        value={name}
+                        onChange={(ev) => setName(ev.target.value)}
+                      />
+                      <input
+                        required
+                        type="email"
+                        placeholder="Email"
+                        className="w-full rounded-lg border px-3 py-2 text-sm"
+                        value={email}
+                        onChange={(ev) => setEmail(ev.target.value)}
+                      />
+                    </>
+                  )}
+                  {isLoggedIn() && (
+                    <p className="text-sm text-slate-600">
+                      RSVP as <strong>{name || "you"}</strong>
+                    </p>
+                  )}
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      disabled={busy || (!isLoggedIn() && (!name.trim() || !email.trim()))}
+                      onClick={() => submitRsvp(e.id)}
+                      className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                    >
+                      {busy ? "Saving…" : "Confirm I'm coming"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setRsvpId(null)}
+                      className="rounded-lg border px-4 py-2 text-sm font-semibold text-slate-600"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRsvpId(e.id);
+                    setMsg("");
+                    setError("");
+                  }}
+                  className="mt-4 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+                >
+                  I'm coming
+                </button>
+              )}
             </li>
           ))}
         </ul>
