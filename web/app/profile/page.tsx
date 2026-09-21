@@ -22,6 +22,12 @@ type MemberProfile = {
   membership_status: string;
 };
 
+function money(cents: number | null | undefined) {
+  const n = Number(cents);
+  if (!Number.isFinite(n)) return "$0.00";
+  return `$${(n / 100).toFixed(2)}`;
+}
+
 export default function ProfilePage() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
@@ -79,6 +85,8 @@ export default function ProfilePage() {
 
   const initials = (user.full_name || user.email || "ME").substring(0, 2).toUpperCase();
   const statusLabel = profile?.membership_status || (user.is_active !== false ? "active" : "inactive");
+  const staff = isStaffRole(user.role) || user.is_superuser;
+  const portalLabel = staff ? "Staff account" : "Member portal";
 
   return (
     <div className="mx-auto max-w-lg space-y-6">
@@ -88,8 +96,12 @@ export default function ProfilePage() {
             {initials}
           </div>
           <h1 className="mt-3 text-xl font-bold text-slate-900">{user.full_name}</h1>
-          <span className="mt-1 rounded-full bg-slate-100 px-3 py-0.5 text-xs font-semibold uppercase text-slate-600">
-            Member portal
+          <span
+            className={`mt-1 rounded-full px-3 py-0.5 text-xs font-semibold uppercase ${
+              staff ? "bg-indigo-100 text-indigo-800" : "bg-slate-100 text-slate-600"
+            }`}
+          >
+            {portalLabel}
           </span>
         </div>
         <dl className="mt-6 grid grid-cols-2 gap-4 border-t pt-4 text-left text-sm">
@@ -116,11 +128,17 @@ export default function ProfilePage() {
           </div>
         </dl>
         <div className="mt-4 flex flex-wrap gap-2">
-          <Link href="/give" className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
+          <Link
+            href="/give"
+            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+          >
             Give
           </Link>
-          {(isStaffRole(user.role) || user.is_superuser) && (
-            <Link href="/admin" className="rounded-lg border px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+          {staff && (
+            <Link
+              href="/admin"
+              className="rounded-lg border px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+            >
               Staff dashboard
             </Link>
           )}
@@ -178,20 +196,16 @@ export default function ProfilePage() {
       <div className="rounded-2xl border bg-white p-6 shadow-sm">
         <h2 className="text-lg font-semibold text-slate-900">My giving</h2>
         <p className="mt-1 text-sm text-slate-500">
-          Gifts linked to this account. Sign in before giving so history is saved.
+          Gifts recorded while signed in on this account.
         </p>
         {loadingGifts && <p className="mt-4 text-sm text-slate-500">Loading…</p>}
         {giftError && (
-          <p className="mt-4 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
-            {String(giftError).toLowerCase().includes("not found")
-              ? "Giving history API is updating. Wait for the API redeploy, then refresh."
-              : giftError}
-          </p>
+          <p className="mt-4 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">{giftError}</p>
         )}
         {!loadingGifts && !giftError && gifts.length === 0 && (
           <p className="mt-4 text-sm text-slate-500">
-            No gifts yet.{" "}
-            <Link href="/give" className="text-blue-600 underline">
+            No gifts on this account yet.{" "}
+            <Link href="/give" className="font-semibold text-blue-600 underline">
               Make a gift
             </Link>
           </p>
@@ -202,7 +216,7 @@ export default function ProfilePage() {
               <li key={g.id} className="flex justify-between py-3 text-sm">
                 <div>
                   <p className="font-medium text-slate-900">
-                    ${(g.amount_cents / 100).toFixed(2)} · {g.fund}
+                    {money(g.amount_cents)} · {g.fund}
                   </p>
                   <p className="text-xs text-slate-500">
                     {new Date(g.created_at).toLocaleDateString()} · {g.status}
