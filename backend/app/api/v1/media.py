@@ -15,6 +15,34 @@ from app.schemas.media import (
 
 router = APIRouter(prefix="/media", tags=["media"])
 
+WEAK_TITLES = {
+    "video",
+    "audio",
+    "message",
+    "sermon",
+    "text",
+    "test",
+    "untitled",
+    "new",
+    "media",
+}
+
+
+def _require_quality_title(title: str, *, publishing: bool) -> None:
+    if not publishing:
+        return
+    t = (title or "").strip().lower()
+    if len(t) < 3:
+        raise HTTPException(status_code=400, detail="Title is too short.")
+    if t in WEAK_TITLES:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f'Title "{title}" is too generic. Use a real message title '
+                '(e.g. "What Is the Gospel?" or "Sunday Worship — March 21").'
+            ),
+        )
+
 
 def _require_playable(
     media_type: str,
@@ -75,6 +103,7 @@ async def list_series(db: DbSession, published_only: bool = True):
 @router.post("/items", response_model=MediaItemOut, status_code=status.HTTP_201_CREATED)
 async def create_media_item(payload: MediaItemCreate, db: DbSession, _: LeaderUser):
     data = payload.model_dump()
+    _require_quality_title(data.get("title") or "", publishing=bool(data.get("is_published")))
     _require_playable(
         data.get("media_type") or "sermon",
         data.get("video_url"),
@@ -135,6 +164,7 @@ async def update_media_item(
         setattr(item, k, v)
 
     will_publish = item.is_published if "is_published" not in data else bool(data["is_published"])
+    _require_quality_title(item.title, publishing=will_publish)
     _require_playable(
         item.media_type,
         item.video_url,
@@ -167,6 +197,7 @@ async def publish_media_item(item_id: int, db: DbSession, _: LeaderUser):
     item = result.scalar_one_or_none()
     if not item:
         raise HTTPException(status_code=404, detail="Media item not found")
+    _require_quality_title(item.title, publishing=True)
     _require_playable(
         item.media_type,
         item.video_url,
