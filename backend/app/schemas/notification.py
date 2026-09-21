@@ -23,6 +23,7 @@ class SendNotificationRequest(BaseModel):
     target: str = "all"
     target_value: str | None = None
     data: dict | None = None
+    channel: str = "push"  # push | email | sms
 
 
 class NotificationLogOut(BaseModel):
@@ -41,3 +42,5 @@ class SendNotificationResponse(BaseModel):
     failed: int
     log_id: int
     errors: list[str] = []
+    channel: str = "push"
+    configured: bool = True

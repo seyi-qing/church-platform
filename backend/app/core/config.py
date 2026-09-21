@@ -20,7 +20,6 @@ class Settings(BaseSettings):
     STRIPE_PUBLISHABLE_KEY: str = ""
     STRIPE_WEBHOOK_SECRET: str = ""
 
-    # Leave empty unless you configure real S3 / Cloudflare R2 / MinIO
     S3_ENDPOINT: str | None = None
     S3_ACCESS_KEY: str | None = None
     S3_SECRET_KEY: str | None = None
@@ -34,6 +33,15 @@ class Settings(BaseSettings):
     VAPID_PUBLIC_KEY: str | None = None
     VAPID_PRIVATE_KEY: str | None = None
     VAPID_CONTACT_EMAIL: str = "mailto:admin@example.com"
+
+    # Email (Resend) — https://resend.com
+    RESEND_API_KEY: str | None = None
+    EMAIL_FROM: str = "Grace Church <onboarding@resend.dev>"
+
+    # SMS (Twilio)
+    TWILIO_ACCOUNT_SID: str | None = None
+    TWILIO_AUTH_TOKEN: str | None = None
+    TWILIO_FROM_NUMBER: str | None = None
 
     BACKEND_CORS_ORIGINS: list[str] = [
         "http://localhost:3000",

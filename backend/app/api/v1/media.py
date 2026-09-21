@@ -25,16 +25,19 @@ WEAK_TITLES = {
     "untitled",
     "new",
     "media",
+    "just testing",
 }
+
+
+def _is_weak_title(title: str) -> bool:
+    t = (title or "").strip().lower()
+    return len(t) < 3 or t in WEAK_TITLES
 
 
 def _require_quality_title(title: str, *, publishing: bool) -> None:
     if not publishing:
         return
-    t = (title or "").strip().lower()
-    if len(t) < 3:
-        raise HTTPException(status_code=400, detail="Title is too short.")
-    if t in WEAK_TITLES:
+    if _is_weak_title(title):
         raise HTTPException(
             status_code=400,
             detail=(
@@ -52,7 +55,6 @@ def _require_playable(
     *,
     publishing: bool,
 ) -> None:
-    """When publishing, ensure the item can actually be consumed on /sermons."""
     if not publishing:
         return
     mt = (media_type or "sermon").lower()
@@ -210,6 +212,34 @@ async def publish_media_item(item_id: int, db: DbSession, _: LeaderUser):
     await db.flush()
     await db.refresh(item)
     return item
+
+
+@router.post("/cleanup-weak")
+async def cleanup_weak_media(
+    db: DbSession,
+    _: LeaderUser,
+    delete: bool = False,
+):
+    """Unpublish (default) or delete items with weak titles / no playable content."""
+    result = await db.execute(select(MediaItem))
+    items = result.scalars().all()
+    touched: list[dict] = []
+    for item in items:
+        weak = _is_weak_title(item.title)
+        video = (item.video_url or "").strip()
+        audio = (item.audio_url or "").strip()
+        text = (item.description or "").strip()
+        empty = not video and not audio and not text
+        if not weak and not empty:
+            continue
+        if delete:
+            await db.delete(item)
+            touched.append({"id": item.id, "title": item.title, "action": "deleted"})
+        else:
+            item.is_published = False
+            touched.append({"id": item.id, "title": item.title, "action": "unpublished"})
+    await db.flush()
+    return {"count": len(touched), "items": touched}
 
 
 @router.post("/upload")
