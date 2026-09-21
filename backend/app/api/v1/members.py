@@ -187,3 +187,21 @@ async def record_attendance(payload: AttendanceCreate, db: DbSession, _: LeaderU
     db.add(row)
     await db.flush()
     return {"ok": True, "id": row.id}
+
+
+@router.get("/attendance")
+async def list_attendance(db: DbSession, _: LeaderUser, limit: int = 100):
+    result = await db.execute(
+        select(Attendance).order_by(Attendance.checked_in_at.desc()).limit(limit)
+    )
+    rows = result.scalars().all()
+    return [
+        {
+            "id": r.id,
+            "event_id": r.event_id,
+            "member_id": r.member_id,
+            "checked_in_at": r.checked_in_at,
+            "notes": r.notes,
+        }
+        for r in rows
+    ]
