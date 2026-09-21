@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 import { clearAuth, getToken, getStoredUser, isStaffRole } from "@/lib/auth";
+import { ChurchLogo } from "@/components/ChurchLogo";
 
 const links = [
   { href: "/", label: "Home" },
@@ -122,9 +123,9 @@ export function Nav() {
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
         <Link
           href="/"
-          className="rounded text-lg font-extrabold tracking-tight text-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+          className="rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
         >
-          Grace Church
+          <ChurchLogo size={32} />
         </Link>
 
         <nav
@@ -138,10 +139,10 @@ export function Nav() {
                 key={l.href}
                 href={l.href}
                 aria-current={active ? "page" : undefined}
-                className={`rounded-lg px-3 py-2 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                className={`rounded-lg px-3 py-2 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${
                   active
-                    ? "bg-blue-50 font-semibold text-blue-700"
-                    : "hover:bg-slate-50 hover:text-blue-700"
+                    ? "bg-brand-50 font-semibold text-brand-700"
+                    : "hover:bg-slate-50 hover:text-brand-700"
                 }`}
               >
                 {l.label}
@@ -152,7 +153,7 @@ export function Nav() {
           {!isLoggedIn && (
             <Link
               href="/login"
-              className="ml-2 rounded-lg px-3 py-2 font-semibold text-slate-600 hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              className="ml-2 rounded-lg px-3 py-2 font-semibold text-slate-600 hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
             >
               Sign in
             </Link>
@@ -166,9 +167,9 @@ export function Nav() {
                 aria-expanded={menuOpen}
                 aria-controls={menuId}
                 onClick={() => setMenuOpen((v) => !v)}
-                className="flex items-center gap-2 rounded-full border border-slate-200 bg-white py-1 pl-1 pr-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                className="flex items-center gap-2 rounded-full border border-slate-200 bg-white py-1 pl-1 pr-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
               >
-                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-xs font-bold text-white">
+                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-600 text-xs font-bold text-white">
                   {initials(user.full_name)}
                 </span>
                 <span className="max-w-[100px] truncate">{user.full_name?.split(" ")[0]}</span>
@@ -199,7 +200,7 @@ export function Nav() {
                 aria-expanded={menuOpen}
                 aria-controls={menuId}
                 onClick={() => setMenuOpen((v) => !v)}
-                className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg text-slate-700 hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg text-slate-700 hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
               >
                 <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
                   {menuOpen ? (
@@ -220,9 +221,9 @@ export function Nav() {
               aria-expanded={menuOpen}
               aria-controls={menuId}
               onClick={() => setMenuOpen((v) => !v)}
-              className="flex items-center rounded-full border border-slate-200 bg-white p-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              className="flex items-center rounded-full border border-slate-200 bg-white p-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500"
             >
-              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-600 text-xs font-bold text-white">
+              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-600 text-xs font-bold text-white">
                 {initials(user.full_name)}
               </span>
             </button>
@@ -243,7 +244,7 @@ export function Nav() {
                     role="menuitem"
                     aria-current={active ? "page" : undefined}
                     className={`block rounded-lg px-3 py-3 text-base font-medium ${
-                      active ? "bg-blue-50 text-blue-700" : "text-slate-700 hover:bg-slate-50"
+                      active ? "bg-brand-50 text-brand-700" : "text-slate-700 hover:bg-slate-50"
                     }`}
                     onClick={() => setMenuOpen(false)}
                   >
