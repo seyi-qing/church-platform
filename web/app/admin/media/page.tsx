@@ -11,6 +11,7 @@ type MediaItem = {
   speaker: string | null;
   video_url?: string | null;
   audio_url?: string | null;
+  description?: string | null;
   is_published: boolean;
 };
 
@@ -26,6 +27,7 @@ export default function AdminMediaPage() {
     speaker: "",
     video_url: "",
     audio_url: "",
+    description: "",
     is_published: true,
   });
   const [saving, setSaving] = useState(false);
@@ -50,6 +52,7 @@ export default function AdminMediaPage() {
       speaker: item.speaker || "",
       video_url: item.video_url || "",
       audio_url: item.audio_url || "",
+      description: item.description || "",
       is_published: item.is_published,
     });
     setShowForm(true);
@@ -66,6 +69,7 @@ export default function AdminMediaPage() {
         speaker: form.speaker || null,
         video_url: form.video_url || null,
         audio_url: form.audio_url || null,
+        description: form.description || null,
         is_published: form.is_published,
       };
       if (editId) {
@@ -84,6 +88,7 @@ export default function AdminMediaPage() {
         speaker: "",
         video_url: "",
         audio_url: "",
+        description: "",
         is_published: true,
       });
       load();
@@ -110,7 +115,7 @@ export default function AdminMediaPage() {
         <div>
           <h1 className="text-2xl font-bold">Media / Playlists</h1>
           <p className="mt-1 text-sm text-slate-500">
-            YouTube or public media URLs. File upload needs S3/R2 later.
+            Published items appear on <strong>/sermons</strong>. Use type + video/audio URL.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -131,6 +136,7 @@ export default function AdminMediaPage() {
                 speaker: "",
                 video_url: "",
                 audio_url: "",
+                description: "",
                 is_published: true,
               });
               setShowForm((v) => !v);
@@ -160,9 +166,11 @@ export default function AdminMediaPage() {
               value={form.media_type}
               onChange={(e) => setForm({ ...form, media_type: e.target.value })}
             >
-              <option value="sermon">Sermon</option>
-              <option value="podcast">Podcast</option>
+              <option value="sermon">Sermon (message)</option>
               <option value="video">Video</option>
+              <option value="audio">Audio</option>
+              <option value="podcast">Podcast</option>
+              <option value="text">Text only</option>
             </select>
             <input
               placeholder="Speaker"
@@ -172,16 +180,22 @@ export default function AdminMediaPage() {
             />
           </div>
           <input
-            placeholder="Video URL (YouTube)"
+            placeholder="Video URL (YouTube watch / shorts / youtu.be)"
             className="w-full rounded-lg border px-3 py-2 text-sm"
             value={form.video_url}
             onChange={(e) => setForm({ ...form, video_url: e.target.value })}
           />
           <input
-            placeholder="Audio URL (optional)"
+            placeholder="Audio URL (mp3 / public link)"
             className="w-full rounded-lg border px-3 py-2 text-sm"
             value={form.audio_url}
             onChange={(e) => setForm({ ...form, audio_url: e.target.value })}
+          />
+          <textarea
+            placeholder="Description or full text message"
+            className="min-h-[80px] w-full rounded-lg border px-3 py-2 text-sm"
+            value={form.description}
+            onChange={(e) => setForm({ ...form, description: e.target.value })}
           />
           <label className="flex items-center gap-2 text-sm">
             <input
@@ -189,7 +203,7 @@ export default function AdminMediaPage() {
               checked={form.is_published}
               onChange={(e) => setForm({ ...form, is_published: e.target.checked })}
             />
-            Published
+            Published (shows on /sermons)
           </label>
           <button
             type="submit"
@@ -211,6 +225,8 @@ export default function AdminMediaPage() {
                 {item.media_type}
                 {item.speaker ? ` · ${item.speaker}` : ""}
                 {item.is_published ? " · published" : " · draft"}
+                {item.video_url ? " · has video" : ""}
+                {item.audio_url ? " · has audio" : ""}
               </p>
             </div>
             <div className="flex flex-wrap gap-2">

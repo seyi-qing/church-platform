@@ -9,6 +9,9 @@ type MediaItem = {
   title: string;
   description: string | null;
   speaker: string | null;
+  media_type: string;
+  video_url?: string | null;
+  audio_url?: string | null;
 };
 
 type EventItem = {
@@ -27,7 +30,7 @@ export default function HomePage() {
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), 90000);
 
-    fetch(`${API_URL}/media/items?media_type=sermon&limit=3`, {
+    fetch(`${API_URL}/media/items?published_only=true&limit=6`, {
       signal: ctrl.signal,
       cache: "no-store",
     })
@@ -74,8 +77,8 @@ export default function HomePage() {
       <section>
         <div className="mb-4 flex items-end justify-between gap-4">
           <div>
-            <h2 className="text-2xl font-bold text-slate-900">Latest sermons</h2>
-            <p className="mt-1 text-sm text-slate-500">Recent messages from Sunday gatherings</p>
+            <h2 className="text-2xl font-bold text-slate-900">Latest messages</h2>
+            <p className="mt-1 text-sm text-slate-500">Sermons, video, and audio from the library</p>
           </div>
           <Link href="/sermons" className="text-sm font-semibold text-blue-600 hover:underline">
             View all
@@ -83,26 +86,35 @@ export default function HomePage() {
         </div>
         {sermons.length === 0 ? (
           <p className="rounded-xl border bg-white p-6 text-sm text-slate-500">
-            Loading sermons… or none published yet.
+            Loading media… or none published yet. Publish items in Admin → Media.
           </p>
         ) : (
           <div className="grid gap-4 sm:grid-cols-3">
-            {sermons.map((s) => (
-              <Link
-                key={s.id}
-                href="/sermons"
-                className="rounded-xl border bg-white p-5 shadow-sm transition hover:shadow-md"
-              >
-                <div className="mb-3 flex h-24 items-center justify-center rounded-lg bg-slate-100 text-sm text-slate-400">
-                  Sermon
-                </div>
-                <h3 className="font-semibold text-slate-900">{s.title}</h3>
-                {s.speaker && <p className="mt-1 text-sm text-slate-500">{s.speaker}</p>}
-                {s.description && (
-                  <p className="mt-2 line-clamp-2 text-sm text-slate-600">{s.description}</p>
-                )}
-              </Link>
-            ))}
+            {sermons.slice(0, 3).map((s) => {
+              const kind = s.video_url
+                ? "Video"
+                : s.audio_url
+                  ? "Audio"
+                  : s.media_type === "video"
+                    ? "Video"
+                    : "Message";
+              return (
+                <Link
+                  key={s.id}
+                  href="/sermons"
+                  className="rounded-xl border bg-white p-5 shadow-sm transition hover:shadow-md"
+                >
+                  <div className="mb-3 flex h-24 items-center justify-center rounded-lg bg-slate-100 text-sm font-medium text-slate-500">
+                    {kind}
+                  </div>
+                  <h3 className="font-semibold text-slate-900">{s.title}</h3>
+                  {s.speaker && <p className="mt-1 text-sm text-slate-500">{s.speaker}</p>}
+                  {s.description && (
+                    <p className="mt-2 line-clamp-2 text-sm text-slate-600">{s.description}</p>
+                  )}
+                </Link>
+              );
+            })}
           </div>
         )}
       </section>
@@ -130,9 +142,7 @@ export default function HomePage() {
                   {new Date(e.start_at).toLocaleString()}
                   {e.location ? ` · ${e.location}` : ""}
                 </p>
-                {e.description && (
-                  <p className="mt-2 text-sm text-slate-600">{e.description}</p>
-                )}
+                {e.description && <p className="mt-2 text-sm text-slate-600">{e.description}</p>}
               </li>
             ))}
           </ul>
