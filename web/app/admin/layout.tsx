@@ -13,6 +13,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     items: [
       { href: "/admin", label: "Dashboard", roles: ["admin", "pastor", "leader", "secretary"] },
       { href: "/admin/analytics", label: "Analytics", roles: ["admin", "pastor"] },
+      { href: "/admin/campuses", label: "Campuses", roles: ["admin", "pastor"] },
     ],
   },
   {
@@ -28,6 +29,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     title: "Ministry",
     items: [
       { href: "/admin/announcements", label: "Announcements", roles: ["admin", "pastor", "leader", "secretary"] },
+      { href: "/admin/communications", label: "Communications", roles: ["admin", "pastor", "leader"] },
       { href: "/admin/events", label: "Events", roles: ["admin", "pastor", "leader", "secretary"] },
       { href: "/admin/media", label: "Media", roles: ["admin", "pastor", "leader"] },
       { href: "/admin/gallery", label: "Gallery", roles: ["admin", "pastor", "leader"] },
