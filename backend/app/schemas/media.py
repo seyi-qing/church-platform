@@ -30,6 +30,17 @@ class MediaItemCreate(BaseModel):
     is_published: bool = False
 
 
+class MediaItemUpdate(BaseModel):
+    title: str | None = None
+    description: str | None = None
+    media_type: str | None = None
+    speaker: str | None = None
+    scripture: str | None = None
+    video_url: str | None = None
+    audio_url: str | None = None
+    is_published: bool | None = None
+
+
 class MediaItemOut(MediaItemCreate):
     id: int
     published_at: datetime | None = None

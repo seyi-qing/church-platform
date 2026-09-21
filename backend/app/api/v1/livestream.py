@@ -5,10 +5,10 @@ from sqlalchemy import select
 
 from app.api.deps import DbSession, LeaderUser
 from app.models.livestream import LivestreamSession
-from app.schemas.livestream import LivestreamCreate, LivestreamOut
+from app.models.notification import PushDevice
+from app.schemas.livestream import LivestreamCreate, LivestreamOut, LivestreamUpdate
 from app.services import mux as mux_service
 from app.services import push as push_service
-from app.models.notification import PushDevice
 
 router = APIRouter(prefix="/livestream", tags=["livestream"])
 
@@ -41,11 +41,11 @@ async def create_session(payload: LivestreamCreate, db: DbSession, _: LeaderUser
 
 @router.get("/sessions", response_model=list[LivestreamOut])
 async def list_sessions(db: DbSession, status_filter: str | None = None):
-    query = select(LivestreamSession).where(LivestreamSession.is_public == True)  # noqa: E712
+    query = select(LivestreamSession)
     if status_filter:
         query = query.where(LivestreamSession.status == status_filter)
     result = await db.execute(
-        query.order_by(LivestreamSession.scheduled_start.desc().nullslast())
+        query.order_by(LivestreamSession.id.desc())
     )
     return result.scalars().all()
 
@@ -67,6 +67,39 @@ async def get_session(session_id: int, db: DbSession, _: LeaderUser):
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     return session
+
+
+@router.patch("/sessions/{session_id}", response_model=LivestreamOut)
+async def update_session(
+    session_id: int, payload: LivestreamUpdate, db: DbSession, _: LeaderUser
+):
+    result = await db.execute(
+        select(LivestreamSession).where(LivestreamSession.id == session_id)
+    )
+    session = result.scalar_one_or_none()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    data = payload.model_dump(exclude_unset=True)
+    for k, v in data.items():
+        setattr(session, k, v)
+    if "youtube_url" in data and data["youtube_url"]:
+        session.playback_url = data["youtube_url"]
+    await db.flush()
+    await db.refresh(session)
+    return session
+
+
+@router.delete("/sessions/{session_id}")
+async def delete_session(session_id: int, db: DbSession, _: LeaderUser):
+    result = await db.execute(
+        select(LivestreamSession).where(LivestreamSession.id == session_id)
+    )
+    session = result.scalar_one_or_none()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    await db.delete(session)
+    await db.flush()
+    return {"ok": True}
 
 
 @router.post("/sessions/{session_id}/start", response_model=LivestreamOut)
@@ -108,15 +141,7 @@ async def end_session(session_id: int, db: DbSession, _: LeaderUser):
     session = result.scalar_one_or_none()
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
-
-    if session.mux_live_stream_id:
-        try:
-            await mux_service.end_live_stream(session.mux_live_stream_id)
-        except Exception:
-            pass
-
     session.status = "ended"
-    session.actual_end = datetime.utcnow()
     await db.flush()
     await db.refresh(session)
     return session

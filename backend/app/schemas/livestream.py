@@ -10,6 +10,15 @@ class LivestreamCreate(BaseModel):
     is_public: bool = True
 
 
+class LivestreamUpdate(BaseModel):
+    title: str | None = None
+    description: str | None = None
+    youtube_url: str | None = None
+    scheduled_start: datetime | None = None
+    is_public: bool | None = None
+    status: str | None = None
+
+
 class LivestreamOut(BaseModel):
     id: int
     title: str
