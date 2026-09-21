@@ -30,6 +30,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
       { href: "/admin/announcements", label: "Announcements", roles: ["admin", "pastor", "leader", "secretary"] },
       { href: "/admin/events", label: "Events", roles: ["admin", "pastor", "leader", "secretary"] },
       { href: "/admin/media", label: "Media", roles: ["admin", "pastor", "leader"] },
+      { href: "/admin/gallery", label: "Gallery", roles: ["admin", "pastor", "leader"] },
       { href: "/admin/livestream", label: "Livestream", roles: ["admin", "pastor", "leader"] },
     ],
   },

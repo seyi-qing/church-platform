@@ -8,6 +8,7 @@ import { clearAuth, getToken, getStoredUser, isStaffRole } from "@/lib/auth";
 const links = [
   { href: "/", label: "Home" },
   { href: "/sermons", label: "Sermons" },
+  { href: "/gallery", label: "Gallery" },
   { href: "/events", label: "Events" },
   { href: "/live", label: "Live" },
   { href: "/give", label: "Give" },
