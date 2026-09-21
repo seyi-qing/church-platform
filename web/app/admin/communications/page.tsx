@@ -12,23 +12,29 @@ type Log = {
   created_at: string;
 };
 
+type Channels = { push: boolean; email: boolean; sms: boolean };
+
 export default function AdminCommunicationsPage() {
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [channel, setChannel] = useState<"push" | "email" | "sms">("push");
+  const [channels, setChannels] = useState<Channels>({ push: false, email: false, sms: false });
   const [logs, setLogs] = useState<Log[]>([]);
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
   const [saving, setSaving] = useState(false);
 
-  function loadLogs() {
+  function load() {
     apiFetch<Log[]>("/notifications/logs?limit=20")
       .then(setLogs)
       .catch(() => setLogs([]));
+    apiFetch<Channels>("/notifications/channels")
+      .then(setChannels)
+      .catch(() => {});
   }
 
   useEffect(() => {
-    loadLogs();
+    load();
   }, []);
 
   async function send(e: React.FormEvent) {
@@ -37,39 +43,36 @@ export default function AdminCommunicationsPage() {
     setError("");
     setInfo("");
     try {
-      if (channel === "push") {
-        const res = await apiFetch<{ sent: number; failed: number; errors?: string[] }>(
-          "/notifications/send",
-          {
-            method: "POST",
-            body: JSON.stringify({
-              title,
-              body,
-              target: "all",
-              data: { screen: "home" },
-            }),
-          }
-        );
-        setInfo(`Push: ${res.sent} sent, ${res.failed} failed.`);
-        if (res.errors?.length) setError(res.errors[0]);
-      } else {
-        // Email/SMS: log as notification for audit; real providers need API keys later
-        await apiFetch("/notifications/send", {
-          method: "POST",
-          body: JSON.stringify({
-            title: `[${channel.toUpperCase()}] ${title}`,
-            body: `${body}\n\n(Channel ${channel} queued — configure provider keys for delivery.)`,
-            target: "all",
-            data: { channel },
-          }),
-        });
-        setInfo(
-          `${channel.toUpperCase()} message recorded. Connect a provider (Resend/Twilio) for real delivery.`
+      const res = await apiFetch<{
+        sent: number;
+        failed: number;
+        errors?: string[];
+        configured?: boolean;
+        channel?: string;
+      }>("/notifications/send", {
+        method: "POST",
+        body: JSON.stringify({
+          title,
+          body,
+          target: "all",
+          channel,
+          data: { screen: "home" },
+        }),
+      });
+      if (!res.configured) {
+        setError(
+          channel === "email"
+            ? "Set RESEND_API_KEY + EMAIL_FROM on Render."
+            : channel === "sms"
+              ? "Set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM_NUMBER on Render."
+              : "Set VAPID keys on Render for web push."
         );
       }
+      setInfo(`${(res.channel || channel).toUpperCase()}: ${res.sent} sent, ${res.failed} failed.`);
+      if (res.errors?.length) setError(res.errors[0]);
       setTitle("");
       setBody("");
-      loadLogs();
+      load();
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -82,7 +85,18 @@ export default function AdminCommunicationsPage() {
       <div>
         <h1 className="text-2xl font-bold">Communications</h1>
         <p className="mt-1 text-sm text-slate-500">
-          Reach the congregation via push now. Email/SMS need provider keys (logged for workflow).
+          Push · Email (Resend) · SMS (Twilio). Status:{" "}
+          <span className={channels.push ? "text-emerald-700" : "text-amber-700"}>
+            push {channels.push ? "on" : "off"}
+          </span>
+          {" · "}
+          <span className={channels.email ? "text-emerald-700" : "text-amber-700"}>
+            email {channels.email ? "on" : "off"}
+          </span>
+          {" · "}
+          <span className={channels.sms ? "text-emerald-700" : "text-amber-700"}>
+            sms {channels.sms ? "on" : "off"}
+          </span>
         </p>
       </div>
 

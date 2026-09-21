@@ -34,6 +34,7 @@ export default function AdminMediaPage() {
   const [items, setItems] = useState<MediaItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [info, setInfo] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
   const [form, setForm] = useState({
@@ -132,17 +133,49 @@ export default function AdminMediaPage() {
     }
   }
 
+  async function cleanup(deleteMode: boolean) {
+    const msg = deleteMode
+      ? "DELETE all weak-title or empty media items? This cannot be undone."
+      : "Unpublish weak-title or empty media items?";
+    if (!confirm(msg)) return;
+    setError("");
+    setInfo("");
+    try {
+      const res = await apiFetch<{ count: number; items: { title: string; action: string }[] }>(
+        `/media/cleanup-weak?delete=${deleteMode}`,
+        { method: "POST" }
+      );
+      setInfo(`Cleanup: ${res.count} item(s) ${deleteMode ? "deleted" : "unpublished"}.`);
+      load();
+    } catch (err: any) {
+      setError(err.message);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">Media / Playlists</h1>
           <p className="mt-1 text-sm text-slate-500">
-            YouTube video URL → auto thumbnail. Or paste a cover image URL. Shows on{" "}
-            <strong>/sermons</strong> and home.
+            Real titles required to publish. YouTube → auto cover. Optional thumbnail URL.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => cleanup(false)}
+            className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900"
+          >
+            Unpublish weak
+          </button>
+          <button
+            type="button"
+            onClick={() => cleanup(true)}
+            className="rounded-lg border border-red-200 px-3 py-2 text-xs font-semibold text-red-700"
+          >
+            Delete weak
+          </button>
           <Link
             href="/sermons"
             target="_blank"
@@ -165,13 +198,14 @@ export default function AdminMediaPage() {
       </div>
 
       {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+      {info && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{info}</p>}
 
       {showForm && (
         <form onSubmit={handleSave} className="space-y-3 rounded-xl border bg-white p-4 shadow-sm">
           <p className="text-sm font-semibold">{editId ? `Edit #${editId}` : "New item"}</p>
           <input
             required
-            placeholder="Title"
+            placeholder="Title (not just Video/Test)"
             className="w-full rounded-lg border px-3 py-2 text-sm"
             value={form.title}
             onChange={(e) => setForm({ ...form, title: e.target.value })}
@@ -196,19 +230,19 @@ export default function AdminMediaPage() {
             />
           </div>
           <input
-            placeholder="Video URL (YouTube) — auto cover from YouTube"
+            placeholder="Video URL (YouTube) — auto cover"
             className="w-full rounded-lg border px-3 py-2 text-sm"
             value={form.video_url}
             onChange={(e) => setForm({ ...form, video_url: e.target.value })}
           />
           <input
-            placeholder="Audio URL — public mp3 link"
+            placeholder="Audio URL — public mp3"
             className="w-full rounded-lg border px-3 py-2 text-sm"
             value={form.audio_url}
             onChange={(e) => setForm({ ...form, audio_url: e.target.value })}
           />
           <input
-            placeholder="Cover / thumbnail image URL (optional — for text items or custom cover)"
+            placeholder="Cover image URL (optional)"
             className="w-full rounded-lg border px-3 py-2 text-sm"
             value={form.thumbnail_url}
             onChange={(e) => setForm({ ...form, thumbnail_url: e.target.value })}
@@ -225,7 +259,7 @@ export default function AdminMediaPage() {
               checked={form.is_published}
               onChange={(e) => setForm({ ...form, is_published: e.target.checked })}
             />
-            Published (shows on /sermons)
+            Published
           </label>
           <button
             type="submit"
@@ -271,18 +305,10 @@ export default function AdminMediaPage() {
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <Link
-                    href="/sermons"
-                    target="_blank"
-                    className="rounded border px-2 py-1 text-xs font-semibold"
-                  >
+                  <Link href="/sermons" target="_blank" className="rounded border px-2 py-1 text-xs font-semibold">
                     View
                   </Link>
-                  <button
-                    type="button"
-                    onClick={() => openEdit(item)}
-                    className="rounded border px-2 py-1 text-xs font-semibold"
-                  >
+                  <button type="button" onClick={() => openEdit(item)} className="rounded border px-2 py-1 text-xs font-semibold">
                     Edit
                   </button>
                   <button

@@ -25,6 +25,7 @@ class MemberProfile(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), unique=True, nullable=False)
     family_id: Mapped[int | None] = mapped_column(ForeignKey("families.id"))
     address: Mapped[str | None] = mapped_column(Text)
+    phone: Mapped[str | None] = mapped_column(String(40))
     birthdate: Mapped[date | None] = mapped_column(Date)
     baptism_date: Mapped[date | None] = mapped_column(Date)
     membership_status: Mapped[str] = mapped_column(String(50), default="active")
@@ -32,7 +33,6 @@ class MemberProfile(Base):
     photo_url: Mapped[str | None] = mapped_column(String(500))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
-    #  FIXED: back_populates changed from "profile" to "member_profile" to match user.py
     user = relationship("User", back_populates="member_profile")
     family = relationship("Family", back_populates="members")
     group_memberships = relationship("GroupMembership", back_populates="member")
