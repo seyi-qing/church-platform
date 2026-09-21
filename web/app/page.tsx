@@ -132,10 +132,7 @@ export default function HomePage() {
       )}
 
       <section className="overflow-hidden rounded-2xl bg-gradient-to-br from-brand-800 via-brand-700 to-brand-600 px-6 py-12 text-white shadow-lg sm:px-10 sm:py-16">
-        <p className="text-sm font-semibold uppercase tracking-wider text-blue-200">
-          {BRAND.shortName}
-        </p>
-        <h1 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl md:text-5xl">
+        <h1 className="text-3xl font-bold tracking-tight sm:text-4xl md:text-5xl">
           Welcome to {BRAND.name}
         </h1>
         <p className="mt-4 max-w-xl text-lg text-blue-100">{BRAND.tagline}</p>
