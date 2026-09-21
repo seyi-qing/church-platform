@@ -3,6 +3,10 @@
 import { useState } from "react";
 import { toYouTubeThumbnailUrl } from "@/lib/youtube";
 
+/** Shared default cover when item has no thumbnail or YouTube URL */
+const DEFAULT_COVER =
+  "https://images.unsplash.com/photo-1438032005730-c779502df39b?w=800&q=80";
+
 type Props = {
   title: string;
   thumbnail_url?: string | null;
@@ -15,9 +19,11 @@ type Props = {
 export function mediaCoverUrl(opts: {
   thumbnail_url?: string | null;
   video_url?: string | null;
-}): string | null {
+}): string {
   if (opts.thumbnail_url?.trim()) return opts.thumbnail_url.trim();
-  return toYouTubeThumbnailUrl(opts.video_url);
+  const yt = toYouTubeThumbnailUrl(opts.video_url);
+  if (yt) return yt;
+  return DEFAULT_COVER;
 }
 
 function kindLabel(
@@ -39,43 +45,29 @@ export function MediaThumb({
   hasAudio,
   className = "aspect-video",
 }: Props) {
-  const src = mediaCoverUrl({ thumbnail_url, video_url });
-  const [broken, setBroken] = useState(false);
+  const preferred = mediaCoverUrl({ thumbnail_url, video_url });
+  const [src, setSrc] = useState(preferred);
   const kind = kindLabel(media_type, video_url, hasAudio);
-  const initial = (title || "G").trim().charAt(0).toUpperCase() || "G";
 
-  if (src && !broken) {
-    return (
-      <div className={`relative overflow-hidden bg-slate-100 ${className}`}>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={src}
-          alt=""
-          className="h-full w-full object-cover"
-          loading="lazy"
-          referrerPolicy="no-referrer"
-          onError={() => setBroken(true)}
-        />
-        <span className="absolute bottom-2 left-2 rounded bg-black/60 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
-          {kind}
-        </span>
-      </div>
-    );
-  }
-
-  /* Designed placeholder when no image — still looks like a cover */
   return (
-    <div
-      className={`relative flex flex-col items-center justify-center overflow-hidden bg-gradient-to-br from-brand-800 via-brand-600 to-brand-500 text-white ${className}`}
-    >
-      <span className="flex h-14 w-14 items-center justify-center rounded-full bg-white/15 text-2xl font-bold backdrop-blur-sm">
-        {initial}
-      </span>
-      <span className="mt-2 max-w-[90%] truncate px-2 text-center text-xs font-semibold text-white/90">
-        {title}
-      </span>
-      <span className="absolute bottom-2 left-2 rounded bg-black/40 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">
+    <div className={`relative overflow-hidden bg-slate-200 ${className}`}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={src}
+        alt=""
+        className="h-full w-full object-cover"
+        loading="lazy"
+        referrerPolicy="no-referrer"
+        onError={() => {
+          if (src !== DEFAULT_COVER) setSrc(DEFAULT_COVER);
+        }}
+      />
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
+      <span className="absolute bottom-2 left-2 rounded bg-black/60 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
         {kind}
+      </span>
+      <span className="absolute bottom-2 right-2 max-w-[55%] truncate text-[10px] font-medium text-white/90">
+        {title}
       </span>
     </div>
   );
