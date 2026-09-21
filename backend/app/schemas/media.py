@@ -38,6 +38,7 @@ class MediaItemUpdate(BaseModel):
     scripture: str | None = None
     video_url: str | None = None
     audio_url: str | None = None
+    thumbnail_url: str | None = None
     is_published: bool | None = None
 
 

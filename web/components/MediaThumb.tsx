@@ -20,6 +20,17 @@ export function mediaCoverUrl(opts: {
   return toYouTubeThumbnailUrl(opts.video_url);
 }
 
+function kindLabel(
+  media_type?: string,
+  video_url?: string | null,
+  hasAudio?: boolean
+) {
+  if (video_url || media_type === "video") return "Video";
+  if (hasAudio || media_type === "audio" || media_type === "podcast") return "Audio";
+  if (media_type === "text") return "Text";
+  return "Message";
+}
+
 export function MediaThumb({
   title,
   thumbnail_url,
@@ -30,15 +41,8 @@ export function MediaThumb({
 }: Props) {
   const src = mediaCoverUrl({ thumbnail_url, video_url });
   const [broken, setBroken] = useState(false);
-
-  const kind =
-    video_url || media_type === "video"
-      ? "Video"
-      : hasAudio || media_type === "audio" || media_type === "podcast"
-        ? "Audio"
-        : media_type === "text"
-          ? "Text"
-          : "Message";
+  const kind = kindLabel(media_type, video_url, hasAudio);
+  const initial = (title || "G").trim().charAt(0).toUpperCase() || "G";
 
   if (src && !broken) {
     return (
@@ -59,11 +63,20 @@ export function MediaThumb({
     );
   }
 
+  /* Designed placeholder when no image — still looks like a cover */
   return (
     <div
-      className={`flex items-center justify-center bg-brand-50 text-sm font-semibold text-brand-700 ${className}`}
+      className={`relative flex flex-col items-center justify-center overflow-hidden bg-gradient-to-br from-brand-800 via-brand-600 to-brand-500 text-white ${className}`}
     >
-      {kind}
+      <span className="flex h-14 w-14 items-center justify-center rounded-full bg-white/15 text-2xl font-bold backdrop-blur-sm">
+        {initial}
+      </span>
+      <span className="mt-2 max-w-[90%] truncate px-2 text-center text-xs font-semibold text-white/90">
+        {title}
+      </span>
+      <span className="absolute bottom-2 left-2 rounded bg-black/40 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">
+        {kind}
+      </span>
     </div>
   );
 }

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { apiFetch } from "@/lib/api";
+import { MediaThumb } from "@/components/MediaThumb";
 
 type MediaItem = {
   id: number;
@@ -11,6 +12,7 @@ type MediaItem = {
   speaker: string | null;
   video_url?: string | null;
   audio_url?: string | null;
+  thumbnail_url?: string | null;
   description?: string | null;
   is_published: boolean;
 };
@@ -40,6 +42,7 @@ export default function AdminMediaPage() {
     speaker: "",
     video_url: "",
     audio_url: "",
+    thumbnail_url: "",
     description: "",
     is_published: true,
   });
@@ -65,10 +68,24 @@ export default function AdminMediaPage() {
       speaker: item.speaker || "",
       video_url: item.video_url || "",
       audio_url: item.audio_url || "",
+      thumbnail_url: item.thumbnail_url || "",
       description: item.description || "",
       is_published: item.is_published,
     });
     setShowForm(true);
+  }
+
+  function resetForm() {
+    setForm({
+      title: "",
+      media_type: "sermon",
+      speaker: "",
+      video_url: "",
+      audio_url: "",
+      thumbnail_url: "",
+      description: "",
+      is_published: true,
+    });
   }
 
   async function handleSave(e: React.FormEvent) {
@@ -82,6 +99,7 @@ export default function AdminMediaPage() {
         speaker: form.speaker || null,
         video_url: form.video_url || null,
         audio_url: form.audio_url || null,
+        thumbnail_url: form.thumbnail_url.trim() || null,
         description: form.description || null,
         is_published: form.is_published,
       };
@@ -95,15 +113,7 @@ export default function AdminMediaPage() {
       }
       setShowForm(false);
       setEditId(null);
-      setForm({
-        title: "",
-        media_type: "sermon",
-        speaker: "",
-        video_url: "",
-        audio_url: "",
-        description: "",
-        is_published: true,
-      });
+      resetForm();
       load();
     } catch (err: any) {
       setError(err.message);
@@ -128,8 +138,8 @@ export default function AdminMediaPage() {
         <div>
           <h1 className="text-2xl font-bold">Media / Playlists</h1>
           <p className="mt-1 text-sm text-slate-500">
-            Published items must have a playable URL (or text). They appear on{" "}
-            <strong>/sermons</strong>.
+            YouTube video URL → auto thumbnail. Or paste a cover image URL. Shows on{" "}
+            <strong>/sermons</strong> and home.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -144,15 +154,7 @@ export default function AdminMediaPage() {
             type="button"
             onClick={() => {
               setEditId(null);
-              setForm({
-                title: "",
-                media_type: "sermon",
-                speaker: "",
-                video_url: "",
-                audio_url: "",
-                description: "",
-                is_published: true,
-              });
+              resetForm();
               setShowForm((v) => !v);
             }}
             className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
@@ -194,16 +196,22 @@ export default function AdminMediaPage() {
             />
           </div>
           <input
-            placeholder="Video URL (required for Video type) — YouTube watch / shorts / youtu.be"
+            placeholder="Video URL (YouTube) — auto cover from YouTube"
             className="w-full rounded-lg border px-3 py-2 text-sm"
             value={form.video_url}
             onChange={(e) => setForm({ ...form, video_url: e.target.value })}
           />
           <input
-            placeholder="Audio URL (required for Audio/Podcast) — public mp3 link"
+            placeholder="Audio URL — public mp3 link"
             className="w-full rounded-lg border px-3 py-2 text-sm"
             value={form.audio_url}
             onChange={(e) => setForm({ ...form, audio_url: e.target.value })}
+          />
+          <input
+            placeholder="Cover / thumbnail image URL (optional — for text items or custom cover)"
+            className="w-full rounded-lg border px-3 py-2 text-sm"
+            value={form.thumbnail_url}
+            onChange={(e) => setForm({ ...form, thumbnail_url: e.target.value })}
           />
           <textarea
             placeholder="Description or full text message"
@@ -217,7 +225,7 @@ export default function AdminMediaPage() {
               checked={form.is_published}
               onChange={(e) => setForm({ ...form, is_published: e.target.checked })}
             />
-            Published (shows on /sermons — must be playable)
+            Published (shows on /sermons)
           </label>
           <button
             type="submit"
@@ -230,58 +238,67 @@ export default function AdminMediaPage() {
       )}
 
       {loading && <p className="text-slate-500">Loading…</p>}
-      <ul className="divide-y rounded-xl border bg-white">
+      <ul className="grid gap-3 sm:grid-cols-2">
         {items.map((item) => {
           const status = playableStatus(item);
           return (
-            <li key={item.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
-              <div className="min-w-0">
-                <p className="font-medium text-slate-900">{item.title}</p>
-                <p className="text-xs text-slate-500">
-                  {item.media_type}
-                  {item.speaker ? ` · ${item.speaker}` : ""}
-                  {item.is_published ? " · published" : " · draft"}
-                </p>
-                <p className="mt-1">
-                  <span
-                    className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${
-                      status.ok
-                        ? "bg-emerald-50 text-emerald-700"
-                        : "bg-amber-50 text-amber-800"
-                    }`}
+            <li key={item.id} className="overflow-hidden rounded-xl border bg-white shadow-sm">
+              <MediaThumb
+                title={item.title}
+                thumbnail_url={item.thumbnail_url}
+                video_url={item.video_url}
+                media_type={item.media_type}
+                hasAudio={!!item.audio_url}
+              />
+              <div className="flex flex-wrap items-start justify-between gap-2 p-3">
+                <div className="min-w-0">
+                  <p className="font-medium text-slate-900">{item.title}</p>
+                  <p className="text-xs text-slate-500">
+                    {item.media_type}
+                    {item.speaker ? ` · ${item.speaker}` : ""}
+                    {item.is_published ? " · published" : " · draft"}
+                  </p>
+                  <p className="mt-1">
+                    <span
+                      className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${
+                        status.ok
+                          ? "bg-emerald-50 text-emerald-700"
+                          : "bg-amber-50 text-amber-800"
+                      }`}
+                    >
+                      {status.label}
+                    </span>
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Link
+                    href="/sermons"
+                    target="_blank"
+                    className="rounded border px-2 py-1 text-xs font-semibold"
                   >
-                    {status.label}
-                  </span>
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Link
-                  href="/sermons"
-                  target="_blank"
-                  className="rounded border px-2 py-1 text-xs font-semibold"
-                >
-                  View
-                </Link>
-                <button
-                  type="button"
-                  onClick={() => openEdit(item)}
-                  className="rounded border px-2 py-1 text-xs font-semibold"
-                >
-                  Edit
-                </button>
-                <button
-                  type="button"
-                  onClick={() => remove(item.id)}
-                  className="rounded border border-red-200 px-2 py-1 text-xs font-semibold text-red-600"
-                >
-                  Delete
-                </button>
+                    View
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => openEdit(item)}
+                    className="rounded border px-2 py-1 text-xs font-semibold"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => remove(item.id)}
+                    className="rounded border border-red-200 px-2 py-1 text-xs font-semibold text-red-600"
+                  >
+                    Delete
+                  </button>
+                </div>
               </div>
             </li>
           );
         })}
         {!loading && items.length === 0 && (
-          <li className="px-4 py-8 text-center text-sm text-slate-500">No media yet.</li>
+          <li className="col-span-full px-4 py-8 text-center text-sm text-slate-500">No media yet.</li>
         )}
       </ul>
     </div>
