@@ -3,18 +3,23 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { getToken, logout } from "@/lib/auth";
+import { getAccessToken, clearAuth, getStoredUser } from "@/lib/auth";
 
 const nav = [
   { href: "/admin", label: "Dashboard", roles: ["admin", "pastor", "leader", "secretary"] },
+  { href: "/admin/announcements", label: "Announcements", roles: ["admin", "pastor", "leader", "secretary"] },
   { href: "/admin/members", label: "Members", roles: ["admin", "pastor", "leader", "secretary"] },
-  { href: "/admin/care", label: "Care Workflow", roles: ["admin", "pastor", "leader", "secretary"] },
-  { href: "/admin/ai", label: "AI Tools", roles: ["admin", "pastor", "leader"] },
+  { href: "/admin/visitors", label: "Visitors", roles: ["admin", "pastor", "leader", "secretary"] },
+  { href: "/admin/attendance", label: "Attendance", roles: ["admin", "pastor", "leader", "secretary"] },
   { href: "/admin/events", label: "Events", roles: ["admin", "pastor", "leader", "secretary"] },
+  { href: "/admin/media", label: "Media", roles: ["admin", "pastor", "leader"] },
   { href: "/admin/livestream", label: "Livestream", roles: ["admin", "pastor", "leader"] },
-  { href: "/admin/giving", label: "Giving Logs", roles: ["admin", "pastor"] },
+  { href: "/admin/giving", label: "Giving", roles: ["admin", "pastor"] },
+  { href: "/admin/expenses", label: "Expenses", roles: ["admin", "pastor"] },
+  { href: "/admin/care", label: "Care", roles: ["admin", "pastor", "leader", "secretary"] },
+  { href: "/admin/ai", label: "AI Tools", roles: ["admin", "pastor", "leader"] },
   { href: "/admin/analytics", label: "Analytics", roles: ["admin", "pastor"] },
-  { href: "/admin/pages", label: "System Pages", roles: ["admin", "pastor"] },
+  { href: "/admin/pages", label: "Pages", roles: ["admin", "pastor"] },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -30,44 +35,34 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       return;
     }
 
-    const token = getToken();
-    const storedUser = localStorage.getItem("user");
-
+    const token = getAccessToken();
     if (!token) {
-      localStorage.clear();
+      clearAuth();
       router.replace("/admin/login");
       return;
     }
 
-    if (storedUser) {
-      try {
-        const parsedUser = JSON.parse(storedUser);
-        setUser(parsedUser);
-
-        if (
-          !["admin", "pastor", "leader", "secretary"].includes(parsedUser.role) &&
-          !parsedUser.is_superuser
-        ) {
-          router.replace("/profile");
-          return;
-        }
-      } catch (e) {
-        console.error("Error decoding session profile payload:", e);
+    const parsedUser = getStoredUser();
+    if (parsedUser) {
+      setUser(parsedUser);
+      if (
+        !["admin", "pastor", "leader", "secretary"].includes(parsedUser.role) &&
+        !parsedUser.is_superuser
+      ) {
+        router.replace("/profile");
+        return;
       }
     }
     setReady(true);
   }, [pathname, router]);
 
-  // Close drawer on navigation
   useEffect(() => {
     setMenuOpen(false);
   }, [pathname]);
 
   if (pathname === "/admin/login") return <>{children}</>;
   if (!ready || !user) {
-    return (
-      <div className="p-8 text-slate-500 font-medium">Syncing permissions…</div>
-    );
+    return <div className="p-8 font-medium text-slate-500">Syncing permissions…</div>;
   }
 
   const links = nav.filter(
@@ -77,13 +72,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
     return (
       <>
-        <div className="p-4 border-b border-slate-800">
+        <div className="border-b border-slate-800 p-4">
           <div className="text-sm font-bold tracking-wide text-white">Church Admin</div>
-          <p className="text-xs text-blue-300 font-semibold mt-0.5 uppercase tracking-wider">
+          <p className="mt-0.5 text-xs font-semibold uppercase tracking-wider text-blue-300">
             {user.role}
           </p>
         </div>
-        <nav className="space-y-0.5 px-2 mt-4 flex-1">
+        <nav className="mt-4 flex-1 space-y-0.5 px-2">
           {links.map((item) => {
             const isActive =
               item.href === "/admin"
@@ -105,15 +100,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             );
           })}
         </nav>
-        <div className="p-2 border-t border-slate-800">
+        <div className="border-t border-slate-800 p-2">
           <button
             type="button"
             onClick={() => {
-              logout();
-              localStorage.clear();
+              clearAuth();
               router.push("/admin/login");
             }}
-            className="w-full rounded-lg px-3 py-2 text-left text-sm text-slate-400 hover:bg-slate-800 font-medium transition"
+            className="w-full rounded-lg px-3 py-2 text-left text-sm font-medium text-slate-400 transition hover:bg-slate-800"
           >
             Sign out
           </button>
@@ -124,14 +118,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   return (
     <div className="flex min-h-screen bg-slate-50">
-      {/* Desktop sidebar */}
-      <aside className="hidden md:flex w-56 shrink-0 border-r bg-slate-900 text-slate-100 flex-col justify-between">
+      <aside className="hidden w-56 shrink-0 flex-col justify-between border-r bg-slate-900 text-slate-100 md:flex">
         <SidebarNav />
       </aside>
 
-      {/* Mobile top bar */}
-      <div className="flex flex-1 flex-col min-w-0">
-        <header className="md:hidden sticky top-0 z-40 flex items-center gap-3 border-b bg-slate-900 px-4 py-3 text-white">
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="sticky top-0 z-40 flex items-center gap-3 border-b bg-slate-900 px-4 py-3 text-white md:hidden">
           <button
             type="button"
             aria-label="Open menu"
@@ -148,15 +140,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </div>
         </header>
 
-        {/* Mobile drawer overlay */}
         {menuOpen && (
           <div className="fixed inset-0 z-50 md:hidden">
-            <div
-              className="absolute inset-0 bg-black/50"
-              onClick={() => setMenuOpen(false)}
-            />
-            <aside className="absolute left-0 top-0 bottom-0 w-64 bg-slate-900 text-slate-100 flex flex-col shadow-xl">
-              <div className="flex items-center justify-between p-4 border-b border-slate-800">
+            <div className="absolute inset-0 bg-black/50" onClick={() => setMenuOpen(false)} />
+            <aside className="absolute bottom-0 left-0 top-0 flex w-64 flex-col bg-slate-900 text-slate-100 shadow-xl">
+              <div className="flex items-center justify-between border-b border-slate-800 p-4">
                 <span className="text-sm font-bold text-white">Menu</span>
                 <button
                   type="button"
@@ -164,9 +152,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                   onClick={() => setMenuOpen(false)}
                   className="rounded-lg p-2 text-slate-300 hover:bg-slate-800"
                 >
-                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
+                  ✕
                 </button>
               </div>
               <SidebarNav onNavigate={() => setMenuOpen(false)} />
