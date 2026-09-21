@@ -93,6 +93,12 @@ export async function subscribeWebPush(): Promise<{ ok: boolean; error?: string 
   }
 }
 
+/** Alias used by WebPushBanner */
+export async function enableWebPush(): Promise<boolean> {
+  const result = await subscribeWebPush();
+  return result.ok;
+}
+
 export async function unsubscribeWebPush(): Promise<void> {
   if (!isWebPushSupported()) return;
   const reg = await navigator.serviceWorker.getRegistration();
