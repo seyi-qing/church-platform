@@ -13,10 +13,19 @@ type Session = {
   playback_url: string | null;
 };
 
+type StartResult = {
+  session: Session;
+  push_sent: number;
+  push_failed: number;
+  push_errors: string[];
+  vapid_configured: boolean;
+};
+
 export default function AdminLivestreamPage() {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [info, setInfo] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
   const [form, setForm] = useState({ title: "", description: "", youtube_url: "" });
@@ -48,6 +57,7 @@ export default function AdminLivestreamPage() {
     e.preventDefault();
     setSaving(true);
     setError("");
+    setInfo("");
     try {
       const body = {
         title: form.title,
@@ -88,8 +98,22 @@ export default function AdminLivestreamPage() {
   }
 
   async function startSession(id: number) {
+    setError("");
+    setInfo("");
     try {
-      await apiFetch(`/livestream/sessions/${id}/start`, { method: "POST" });
+      const result = await apiFetch<StartResult>(`/livestream/sessions/${id}/start`, {
+        method: "POST",
+      });
+      const parts = [
+        "Now live on /live.",
+        result.vapid_configured
+          ? `Push: ${result.push_sent} sent, ${result.push_failed} failed.`
+          : "Push: VAPID keys not set on API — add VAPID_PUBLIC_KEY + VAPID_PRIVATE_KEY on Render to notify browsers.",
+      ];
+      if (result.push_errors?.length) {
+        parts.push(result.push_errors[0]);
+      }
+      setInfo(parts.join(" "));
       load();
     } catch (err: any) {
       setError(err.message);
@@ -99,6 +123,7 @@ export default function AdminLivestreamPage() {
   async function endSession(id: number) {
     try {
       await apiFetch(`/livestream/sessions/${id}/end`, { method: "POST" });
+      setInfo("Stream ended.");
       load();
     } catch (err: any) {
       setError(err.message);
@@ -111,7 +136,8 @@ export default function AdminLivestreamPage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Livestream</h1>
           <p className="mt-1 text-sm text-slate-500">
-            Paste a YouTube URL, <strong>Go live</strong>, then open the public page.
+            YouTube URL required. <strong>Go live</strong> publishes to /live and notifies devices that
+            enabled alerts.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -137,6 +163,7 @@ export default function AdminLivestreamPage() {
       </div>
 
       {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+      {info && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{info}</p>}
 
       {showForm && (
         <form onSubmit={handleSave} className="space-y-3 rounded-xl border bg-white p-4 shadow-sm">
@@ -151,7 +178,8 @@ export default function AdminLivestreamPage() {
             onChange={(e) => setForm({ ...form, title: e.target.value })}
           />
           <input
-            placeholder="YouTube URL"
+            required
+            placeholder="YouTube URL (required to go live)"
             className="w-full rounded-lg border px-3 py-2"
             value={form.youtube_url}
             onChange={(e) => setForm({ ...form, youtube_url: e.target.value })}
@@ -194,7 +222,7 @@ export default function AdminLivestreamPage() {
                     {s.status}
                   </span>
                 </p>
-                {s.youtube_url && (
+                {s.youtube_url ? (
                   <a
                     href={s.youtube_url}
                     target="_blank"
@@ -203,6 +231,8 @@ export default function AdminLivestreamPage() {
                   >
                     {s.youtube_url}
                   </a>
+                ) : (
+                  <p className="mt-1 text-xs font-medium text-amber-700">No YouTube URL — add one before Go live</p>
                 )}
               </div>
               <div className="flex flex-wrap gap-2">

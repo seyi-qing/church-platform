@@ -15,6 +15,19 @@ type MediaItem = {
   is_published: boolean;
 };
 
+function playableStatus(item: MediaItem): { ok: boolean; label: string } {
+  const mt = (item.media_type || "sermon").toLowerCase();
+  const hasV = !!(item.video_url && item.video_url.trim());
+  const hasA = !!(item.audio_url && item.audio_url.trim());
+  const hasT = !!(item.description && item.description.trim());
+  if (mt === "video") return hasV ? { ok: true, label: "playable" } : { ok: false, label: "missing video URL" };
+  if (mt === "audio" || mt === "podcast")
+    return hasA ? { ok: true, label: "playable" } : { ok: false, label: "missing audio URL" };
+  if (mt === "text") return hasT ? { ok: true, label: "text ok" } : { ok: false, label: "missing text" };
+  if (hasV || hasA || hasT) return { ok: true, label: hasV ? "has video" : hasA ? "has audio" : "text only" };
+  return { ok: false, label: "no media URL" };
+}
+
 export default function AdminMediaPage() {
   const [items, setItems] = useState<MediaItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -115,7 +128,8 @@ export default function AdminMediaPage() {
         <div>
           <h1 className="text-2xl font-bold">Media / Playlists</h1>
           <p className="mt-1 text-sm text-slate-500">
-            Published items appear on <strong>/sermons</strong>. Use type + video/audio URL.
+            Published items must have a playable URL (or text). They appear on{" "}
+            <strong>/sermons</strong>.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -180,13 +194,13 @@ export default function AdminMediaPage() {
             />
           </div>
           <input
-            placeholder="Video URL (YouTube watch / shorts / youtu.be)"
+            placeholder="Video URL (required for Video type) — YouTube watch / shorts / youtu.be"
             className="w-full rounded-lg border px-3 py-2 text-sm"
             value={form.video_url}
             onChange={(e) => setForm({ ...form, video_url: e.target.value })}
           />
           <input
-            placeholder="Audio URL (mp3 / public link)"
+            placeholder="Audio URL (required for Audio/Podcast) — public mp3 link"
             className="w-full rounded-lg border px-3 py-2 text-sm"
             value={form.audio_url}
             onChange={(e) => setForm({ ...form, audio_url: e.target.value })}
@@ -203,7 +217,7 @@ export default function AdminMediaPage() {
               checked={form.is_published}
               onChange={(e) => setForm({ ...form, is_published: e.target.checked })}
             />
-            Published (shows on /sermons)
+            Published (shows on /sermons — must be playable)
           </label>
           <button
             type="submit"
@@ -217,43 +231,55 @@ export default function AdminMediaPage() {
 
       {loading && <p className="text-slate-500">Loading…</p>}
       <ul className="divide-y rounded-xl border bg-white">
-        {items.map((item) => (
-          <li key={item.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
-            <div className="min-w-0">
-              <p className="font-medium text-slate-900">{item.title}</p>
-              <p className="text-xs text-slate-500">
-                {item.media_type}
-                {item.speaker ? ` · ${item.speaker}` : ""}
-                {item.is_published ? " · published" : " · draft"}
-                {item.video_url ? " · has video" : ""}
-                {item.audio_url ? " · has audio" : ""}
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Link
-                href="/sermons"
-                target="_blank"
-                className="rounded border px-2 py-1 text-xs font-semibold"
-              >
-                View
-              </Link>
-              <button
-                type="button"
-                onClick={() => openEdit(item)}
-                className="rounded border px-2 py-1 text-xs font-semibold"
-              >
-                Edit
-              </button>
-              <button
-                type="button"
-                onClick={() => remove(item.id)}
-                className="rounded border border-red-200 px-2 py-1 text-xs font-semibold text-red-600"
-              >
-                Delete
-              </button>
-            </div>
-          </li>
-        ))}
+        {items.map((item) => {
+          const status = playableStatus(item);
+          return (
+            <li key={item.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
+              <div className="min-w-0">
+                <p className="font-medium text-slate-900">{item.title}</p>
+                <p className="text-xs text-slate-500">
+                  {item.media_type}
+                  {item.speaker ? ` · ${item.speaker}` : ""}
+                  {item.is_published ? " · published" : " · draft"}
+                </p>
+                <p className="mt-1">
+                  <span
+                    className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${
+                      status.ok
+                        ? "bg-emerald-50 text-emerald-700"
+                        : "bg-amber-50 text-amber-800"
+                    }`}
+                  >
+                    {status.label}
+                  </span>
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Link
+                  href="/sermons"
+                  target="_blank"
+                  className="rounded border px-2 py-1 text-xs font-semibold"
+                >
+                  View
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => openEdit(item)}
+                  className="rounded border px-2 py-1 text-xs font-semibold"
+                >
+                  Edit
+                </button>
+                <button
+                  type="button"
+                  onClick={() => remove(item.id)}
+                  className="rounded border border-red-200 px-2 py-1 text-xs font-semibold text-red-600"
+                >
+                  Delete
+                </button>
+              </div>
+            </li>
+          );
+        })}
         {!loading && items.length === 0 && (
           <li className="px-4 py-8 text-center text-sm text-slate-500">No media yet.</li>
         )}
