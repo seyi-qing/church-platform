@@ -21,6 +21,13 @@ type StartResult = {
   vapid_configured: boolean;
 };
 
+type NotifyResult = {
+  push_sent: number;
+  push_failed: number;
+  push_errors: string[];
+  vapid_configured: boolean;
+};
+
 export default function AdminLivestreamPage() {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
@@ -51,6 +58,16 @@ export default function AdminLivestreamPage() {
       youtube_url: s.youtube_url || "",
     });
     setShowForm(true);
+  }
+
+  function formatPush(result: { push_sent: number; push_failed: number; push_errors: string[]; vapid_configured: boolean }) {
+    const parts = [
+      result.vapid_configured
+        ? `Push: ${result.push_sent} sent, ${result.push_failed} failed.`
+        : "Push: VAPID keys not set on API — add VAPID_PUBLIC_KEY + VAPID_PRIVATE_KEY on Render.",
+    ];
+    if (result.push_errors?.length) parts.push(result.push_errors[0]);
+    return parts.join(" ");
   }
 
   async function handleSave(e: React.FormEvent) {
@@ -104,17 +121,21 @@ export default function AdminLivestreamPage() {
       const result = await apiFetch<StartResult>(`/livestream/sessions/${id}/start`, {
         method: "POST",
       });
-      const parts = [
-        "Now live on /live.",
-        result.vapid_configured
-          ? `Push: ${result.push_sent} sent, ${result.push_failed} failed.`
-          : "Push: VAPID keys not set on API — add VAPID_PUBLIC_KEY + VAPID_PRIVATE_KEY on Render to notify browsers.",
-      ];
-      if (result.push_errors?.length) {
-        parts.push(result.push_errors[0]);
-      }
-      setInfo(parts.join(" "));
+      setInfo(`Now live on /live. ${formatPush(result)}`);
       load();
+    } catch (err: any) {
+      setError(err.message);
+    }
+  }
+
+  async function notifyAgain(id: number) {
+    setError("");
+    setInfo("");
+    try {
+      const result = await apiFetch<NotifyResult>(`/livestream/sessions/${id}/notify`, {
+        method: "POST",
+      });
+      setInfo(`Notification sent. ${formatPush(result)}`);
     } catch (err: any) {
       setError(err.message);
     }
@@ -136,8 +157,8 @@ export default function AdminLivestreamPage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Livestream</h1>
           <p className="mt-1 text-sm text-slate-500">
-            YouTube URL required. <strong>Go live</strong> publishes to /live and notifies devices that
-            enabled alerts.
+            <strong>Go live</strong> publishes to /live and sends “We're live” push. Use{" "}
+            <strong>Notify again</strong> while already live.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -232,7 +253,9 @@ export default function AdminLivestreamPage() {
                     {s.youtube_url}
                   </a>
                 ) : (
-                  <p className="mt-1 text-xs font-medium text-amber-700">No YouTube URL — add one before Go live</p>
+                  <p className="mt-1 text-xs font-medium text-amber-700">
+                    No YouTube URL — add one before Go live
+                  </p>
                 )}
               </div>
               <div className="flex flex-wrap gap-2">
@@ -260,13 +283,22 @@ export default function AdminLivestreamPage() {
                   </button>
                 )}
                 {s.status === "live" && (
-                  <button
-                    type="button"
-                    onClick={() => endSession(s.id)}
-                    className="rounded-lg border px-3 py-1.5 text-xs font-semibold"
-                  >
-                    End
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => notifyAgain(s.id)}
+                      className="rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white"
+                    >
+                      Notify again
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => endSession(s.id)}
+                      className="rounded-lg border px-3 py-1.5 text-xs font-semibold"
+                    >
+                      End
+                    </button>
+                  </>
                 )}
                 <button
                   type="button"

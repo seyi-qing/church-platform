@@ -1,10 +1,23 @@
-// app/layout.tsx
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import { BRAND } from "@/lib/brand";
 
 export const metadata: Metadata = {
-  title: "Grace Church",
-  description: "Welcome to Grace Church – worship, community, and hope.",
+  title: {
+    default: BRAND.name,
+    template: `%s · ${BRAND.name}`,
+  },
+  description: BRAND.description,
+  applicationName: BRAND.name,
+  icons: {
+    icon: [{ url: "/favicon.svg", type: "image/svg+xml" }],
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: BRAND.primary,
+  width: "device-width",
+  initialScale: 1,
 };
 
 export default function RootLayout({

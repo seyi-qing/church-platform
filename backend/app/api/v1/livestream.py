@@ -23,6 +23,58 @@ class StartSessionResponse(BaseModel):
     vapid_configured: bool = False
 
 
+class NotifyResponse(BaseModel):
+    push_sent: int = 0
+    push_failed: int = 0
+    push_errors: list[str] = []
+    vapid_configured: bool = False
+
+
+async def _send_live_push(
+    db, current_user, session: LivestreamSession
+) -> tuple[int, int, list[str], bool]:
+    push_sent = push_failed = 0
+    push_errors: list[str] = []
+    vapid_ok = bool(push_service.get_vapid_public_key())
+    try:
+        tokens_q = await db.execute(
+            select(PushDevice.token).where(PushDevice.is_active == True)  # noqa: E712
+        )
+        tokens = [r[0] for r in tokens_q.all()]
+        if tokens:
+            send_result = await push_service.notify_devices(
+                tokens,
+                title="We're live!",
+                body=session.title or "Join us for worship",
+                data={"screen": "live", "session_id": str(session.id)},
+            )
+            push_sent = send_result.get("sent") or 0
+            push_failed = send_result.get("failed") or 0
+            push_errors = (send_result.get("errors") or [])[:5]
+            for gone in send_result.get("gone_tokens") or []:
+                gone_q = await db.execute(
+                    select(PushDevice).where(PushDevice.token == gone)
+                )
+                gone_dev = gone_q.scalar_one_or_none()
+                if gone_dev:
+                    gone_dev.is_active = False
+            log = NotificationLog(
+                title="We're live!",
+                body=session.title or "Join us for worship",
+                data_json=json.dumps({"screen": "live", "session_id": session.id}),
+                target="all",
+                target_id=None,
+                sent_count=push_sent,
+                failed_count=push_failed,
+                created_by=current_user.id,
+            )
+            db.add(log)
+            await db.flush()
+    except Exception as e:
+        push_errors.append(str(e)[:200])
+    return push_sent, push_failed, push_errors, vapid_ok
+
+
 @router.post("/sessions", response_model=LivestreamOut, status_code=status.HTTP_201_CREATED)
 async def create_session(payload: LivestreamCreate, db: DbSession, _: LeaderUser):
     mux_data = None
@@ -126,7 +178,6 @@ async def start_session(session_id: int, db: DbSession, current_user: LeaderUser
             detail="Add a YouTube URL before going live so /live can embed the stream.",
         )
 
-    # End any other live sessions so only one is active
     others = await db.execute(
         select(LivestreamSession).where(
             LivestreamSession.status == "live",
@@ -143,49 +194,37 @@ async def start_session(session_id: int, db: DbSession, current_user: LeaderUser
     await db.flush()
     await db.refresh(session)
 
-    push_sent = push_failed = 0
-    push_errors: list[str] = []
-    vapid_ok = bool(push_service.get_vapid_public_key())
-
-    try:
-        tokens_q = await db.execute(
-            select(PushDevice.token).where(PushDevice.is_active == True)  # noqa: E712
-        )
-        tokens = [r[0] for r in tokens_q.all()]
-        if tokens:
-            send_result = await push_service.notify_devices(
-                tokens,
-                title="We're live!",
-                body=session.title or "Join us for worship",
-                data={"screen": "live", "session_id": str(session.id)},
-            )
-            push_sent = send_result.get("sent") or 0
-            push_failed = send_result.get("failed") or 0
-            push_errors = (send_result.get("errors") or [])[:5]
-            for gone in send_result.get("gone_tokens") or []:
-                gone_q = await db.execute(
-                    select(PushDevice).where(PushDevice.token == gone)
-                )
-                gone_dev = gone_q.scalar_one_or_none()
-                if gone_dev:
-                    gone_dev.is_active = False
-            log = NotificationLog(
-                title="We're live!",
-                body=session.title or "Join us for worship",
-                data_json=json.dumps({"screen": "live", "session_id": session.id}),
-                target="all",
-                target_id=None,
-                sent_count=push_sent,
-                failed_count=push_failed,
-                created_by=current_user.id,
-            )
-            db.add(log)
-            await db.flush()
-    except Exception as e:
-        push_errors.append(str(e)[:200])
+    push_sent, push_failed, push_errors, vapid_ok = await _send_live_push(
+        db, current_user, session
+    )
 
     return StartSessionResponse(
         session=session,
+        push_sent=push_sent,
+        push_failed=push_failed,
+        push_errors=push_errors,
+        vapid_configured=vapid_ok,
+    )
+
+
+@router.post("/sessions/{session_id}/notify", response_model=NotifyResponse)
+async def notify_live_again(session_id: int, db: DbSession, current_user: LeaderUser):
+    """Send 'We're live' push without changing session status (session must already be live)."""
+    result = await db.execute(
+        select(LivestreamSession).where(LivestreamSession.id == session_id)
+    )
+    session = result.scalar_one_or_none()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    if session.status != "live":
+        raise HTTPException(
+            status_code=400,
+            detail="Session is not live. Use Go live first, or go live to notify.",
+        )
+    push_sent, push_failed, push_errors, vapid_ok = await _send_live_push(
+        db, current_user, session
+    )
+    return NotifyResponse(
         push_sent=push_sent,
         push_failed=push_failed,
         push_errors=push_errors,
