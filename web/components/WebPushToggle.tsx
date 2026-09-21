@@ -1,114 +1,64 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import {
-  getWebPushStatus,
-  subscribeWebPush,
-  unsubscribeWebPush,
-  isWebPushSupported,
-} from "@/lib/webPush";
 
-export function WebPushToggle({ className = "" }: { className?: string }) {
-  const [status, setStatus] = useState<
-    "loading" | "unsupported" | "denied" | "subscribed" | "unsubscribed"
-  >("loading");
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState("");
+const DISMISS_KEY = "cp_push_banner_dismissed";
 
-  useEffect(() => {
-    getWebPushStatus().then(setStatus);
-  }, []);
-
-  async function enable() {
-    setBusy(true);
-    setMessage("");
-    const result = await subscribeWebPush();
-    if (result.ok) {
-      setStatus("subscribed");
-      setMessage("Browser notifications enabled");
-    } else {
-      setMessage(result.error || "Failed");
-      setStatus(await getWebPushStatus());
-    }
-    setBusy(false);
-  }
-
-  async function disable() {
-    setBusy(true);
-    setMessage("");
-    await unsubscribeWebPush();
-    setStatus("unsubscribed");
-    setMessage("Browser notifications disabled");
-    setBusy(false);
-  }
-
-  if (status === "loading") return null;
-  if (status === "unsupported") {
-    return (
-      <p className={`text-sm text-slate-500 ${className}`}>
-        This browser does not support web push notifications.
-      </p>
-    );
-  }
-  if (status === "denied") {
-    return (
-      <p className={`text-sm text-amber-700 ${className}`}>
-        Notifications are blocked. Enable them in your browser settings.
-      </p>
-    );
-  }
-
-  return (
-    <div className={className}>
-      {status === "subscribed" ? (
-        <button
-          type="button"
-          onClick={disable}
-          disabled={busy}
-          className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-        >
-          {busy ? "…" : "Disable browser notifications"}
-        </button>
-      ) : (
-        <button
-          type="button"
-          onClick={enable}
-          disabled={busy}
-          className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60"
-        >
-          {busy ? "Enabling…" : "Enable browser notifications"}
-        </button>
-      )}
-      {message && <p className="mt-2 text-sm text-slate-600">{message}</p>}
-    </div>
-  );
-}
-
-/** Compact version for footer / nav */
 export function WebPushBanner() {
-  const [show, setShow] = useState(false);
+  const [visible, setVisible] = useState(false);
 
   useEffect(() => {
-    if (!isWebPushSupported()) return;
-    getWebPushStatus().then((s) => {
-      if (s === "unsubscribed") setShow(true);
-    });
+    try {
+      if (localStorage.getItem(DISMISS_KEY) === "1") return;
+      // Only hint if Notification API exists and permission not already decided
+      if (typeof window !== "undefined" && "Notification" in window) {
+        if (Notification.permission === "default") setVisible(true);
+      }
+    } catch {
+      /* ignore */
+    }
   }, []);
 
-  if (!show) return null;
+  function dismiss() {
+    try {
+      localStorage.setItem(DISMISS_KEY, "1");
+    } catch {
+      /* ignore */
+    }
+    setVisible(false);
+  }
+
+  if (!visible) return null;
 
   return (
-    <div className="border-b bg-brand-50 px-4 py-2 text-center text-sm text-brand-900">
-      Get alerts for live services and updates.{" "}
+    <div
+      role="region"
+      aria-label="Notifications"
+      className="border-b border-blue-100 bg-blue-50 px-4 py-2 text-center text-sm text-blue-900"
+    >
+      <span className="mr-2">Get alerts for live services and updates.</span>
       <button
         type="button"
-        className="font-semibold underline"
+        className="font-semibold underline underline-offset-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
         onClick={async () => {
-          const r = await subscribeWebPush();
-          if (r.ok) setShow(false);
+          try {
+            const { enableWebPush } = await import("@/lib/webPush");
+            await enableWebPush();
+          } catch {
+            /* ignore */
+          }
+          dismiss();
         }}
       >
         Enable notifications
+      </button>
+      <button
+        type="button"
+        aria-label="Dismiss notification banner"
+        onClick={dismiss}
+        className="ml-3 rounded px-1 text-blue-700/70 hover:text-blue-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+      >
+        ✕
       </button>
     </div>
   );
