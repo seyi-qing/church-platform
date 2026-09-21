@@ -27,6 +27,11 @@ type CareCard = {
   assigned_to: number | null;
 };
 
+type CareBoard = {
+  open?: CareCard[];
+  assigned?: CareCard[];
+};
+
 function StatusPill({ status }: { status: string }) {
   const s = (status || "active").toLowerCase();
   const styles: Record<string, string> = {
@@ -63,16 +68,16 @@ export default function AdminVisitorsPage() {
 
   function load() {
     Promise.all([
-      apiFetch<Profile[]>("/members/profiles?limit=100").catch(() => []),
-      apiFetch<User[]>("/members/users").catch(() => []),
-      apiFetch<{ open?: CareCard[]; assigned?: CareCard[] }>("/care/workflow/board").catch(
-        () => ({})
+      apiFetch<Profile[]>("/members/profiles?limit=100").catch(() => [] as Profile[]),
+      apiFetch<User[]>("/members/users").catch(() => [] as User[]),
+      apiFetch<CareBoard>("/care/workflow/board").catch(
+        (): CareBoard => ({ open: [], assigned: [] })
       ),
     ]).then(([p, u, board]) => {
       setProfiles(p);
       setUsers(u);
-      const open = board.open || [];
-      const assigned = board.assigned || [];
+      const open = board.open ?? [];
+      const assigned = board.assigned ?? [];
       setFollowUps(
         [...open, ...assigned].filter(
           (c) => (c.category || "").toLowerCase() === "visitor" || c.summary?.includes("visitor")
