@@ -5,7 +5,13 @@ from sqlalchemy import select
 
 from app.api.deps import LeaderUser, DbSession
 from app.models.media import MediaItem, Series
-from app.schemas.media import MediaItemCreate, MediaItemOut, SeriesCreate, SeriesOut
+from app.schemas.media import (
+    MediaItemCreate,
+    MediaItemOut,
+    MediaItemUpdate,
+    SeriesCreate,
+    SeriesOut,
+)
 
 router = APIRouter(prefix="/media", tags=["media"])
 
@@ -57,7 +63,7 @@ async def list_media_items(
     if series_id:
         query = query.where(MediaItem.series_id == series_id)
     result = await db.execute(
-        query.order_by(MediaItem.published_at.desc().nullslast()).offset(skip).limit(limit)
+        query.order_by(MediaItem.id.desc()).offset(skip).limit(limit)
     )
     return result.scalars().all()
 
@@ -69,6 +75,35 @@ async def get_media_item(item_id: int, db: DbSession):
     if not item:
         raise HTTPException(status_code=404, detail="Media item not found")
     return item
+
+
+@router.patch("/items/{item_id}", response_model=MediaItemOut)
+async def update_media_item(
+    item_id: int, payload: MediaItemUpdate, db: DbSession, _: LeaderUser
+):
+    result = await db.execute(select(MediaItem).where(MediaItem.id == item_id))
+    item = result.scalar_one_or_none()
+    if not item:
+        raise HTTPException(status_code=404, detail="Media item not found")
+    data = payload.model_dump(exclude_unset=True)
+    for k, v in data.items():
+        setattr(item, k, v)
+    if data.get("is_published") is True and not item.published_at:
+        item.published_at = datetime.utcnow()
+    await db.flush()
+    await db.refresh(item)
+    return item
+
+
+@router.delete("/items/{item_id}")
+async def delete_media_item(item_id: int, db: DbSession, _: LeaderUser):
+    result = await db.execute(select(MediaItem).where(MediaItem.id == item_id))
+    item = result.scalar_one_or_none()
+    if not item:
+        raise HTTPException(status_code=404, detail="Media item not found")
+    await db.delete(item)
+    await db.flush()
+    return {"ok": True}
 
 
 @router.patch("/items/{item_id}/publish", response_model=MediaItemOut)

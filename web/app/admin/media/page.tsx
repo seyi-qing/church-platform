@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { apiFetch } from "@/lib/api";
 
 type MediaItem = {
@@ -18,12 +19,11 @@ export default function AdminMediaPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [showForm, setShowForm] = useState(false);
+  const [editId, setEditId] = useState<number | null>(null);
   const [form, setForm] = useState({
     title: "",
     media_type: "sermon",
     speaker: "",
-    scripture: "",
-    description: "",
     video_url: "",
     audio_url: "",
     is_published: true,
@@ -42,31 +42,46 @@ export default function AdminMediaPage() {
     load();
   }, []);
 
-  async function handleCreate(e: React.FormEvent) {
+  function openEdit(item: MediaItem) {
+    setEditId(item.id);
+    setForm({
+      title: item.title,
+      media_type: item.media_type || "sermon",
+      speaker: item.speaker || "",
+      video_url: item.video_url || "",
+      audio_url: item.audio_url || "",
+      is_published: item.is_published,
+    });
+    setShowForm(true);
+  }
+
+  async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
     setError("");
     try {
-      await apiFetch("/media/items", {
-        method: "POST",
-        body: JSON.stringify({
-          title: form.title,
-          media_type: form.media_type,
-          speaker: form.speaker || null,
-          scripture: form.scripture || null,
-          description: form.description || null,
-          video_url: form.video_url || null,
-          audio_url: form.audio_url || null,
-          is_published: form.is_published,
-        }),
-      });
+      const body = {
+        title: form.title,
+        media_type: form.media_type,
+        speaker: form.speaker || null,
+        video_url: form.video_url || null,
+        audio_url: form.audio_url || null,
+        is_published: form.is_published,
+      };
+      if (editId) {
+        await apiFetch(`/media/items/${editId}`, {
+          method: "PATCH",
+          body: JSON.stringify(body),
+        });
+      } else {
+        await apiFetch("/media/items", { method: "POST", body: JSON.stringify(body) });
+      }
       setShowForm(false);
+      setEditId(null);
       setForm({
         title: "",
         media_type: "sermon",
         speaker: "",
-        scripture: "",
-        description: "",
         video_url: "",
         audio_url: "",
         is_published: true,
@@ -79,9 +94,10 @@ export default function AdminMediaPage() {
     }
   }
 
-  async function publish(id: number) {
+  async function remove(id: number) {
+    if (!confirm("Delete this media item?")) return;
     try {
-      await apiFetch(`/media/items/${id}/publish`, { method: "PATCH" });
+      await apiFetch(`/media/items/${id}`, { method: "DELETE" });
       load();
     } catch (err: any) {
       setError(err.message);
@@ -94,24 +110,43 @@ export default function AdminMediaPage() {
         <div>
           <h1 className="text-2xl font-bold">Media / Playlists</h1>
           <p className="mt-1 text-sm text-slate-500">
-            Add sermons with a YouTube or public media URL. File upload needs S3/R2 (optional later).
+            YouTube or public media URLs. File upload needs S3/R2 later.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => setShowForm(!showForm)}
-          className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
-        >
-          {showForm ? "Cancel" : "Add media"}
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <Link
+            href="/sermons"
+            target="_blank"
+            className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700"
+          >
+            View sermons
+          </Link>
+          <button
+            type="button"
+            onClick={() => {
+              setEditId(null);
+              setForm({
+                title: "",
+                media_type: "sermon",
+                speaker: "",
+                video_url: "",
+                audio_url: "",
+                is_published: true,
+              });
+              setShowForm((v) => !v);
+            }}
+            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
+          >
+            {showForm && !editId ? "Cancel" : "Add media"}
+          </button>
+        </div>
       </div>
 
-      {error && (
-        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
-      )}
+      {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
 
       {showForm && (
-        <form onSubmit={handleCreate} className="space-y-3 rounded-xl border bg-white p-4 shadow-sm">
+        <form onSubmit={handleSave} className="space-y-3 rounded-xl border bg-white p-4 shadow-sm">
+          <p className="text-sm font-semibold">{editId ? `Edit #${editId}` : "New item"}</p>
           <input
             required
             placeholder="Title"
@@ -126,7 +161,7 @@ export default function AdminMediaPage() {
               onChange={(e) => setForm({ ...form, media_type: e.target.value })}
             >
               <option value="sermon">Sermon</option>
-              <option value="podcast">Podcast / audio</option>
+              <option value="podcast">Podcast</option>
               <option value="video">Video</option>
             </select>
             <input
@@ -137,49 +172,31 @@ export default function AdminMediaPage() {
             />
           </div>
           <input
-            placeholder="Scripture (optional)"
+            placeholder="Video URL (YouTube)"
             className="w-full rounded-lg border px-3 py-2 text-sm"
-            value={form.scripture}
-            onChange={(e) => setForm({ ...form, scripture: e.target.value })}
+            value={form.video_url}
+            onChange={(e) => setForm({ ...form, video_url: e.target.value })}
           />
-          <textarea
-            placeholder="Description"
+          <input
+            placeholder="Audio URL (optional)"
             className="w-full rounded-lg border px-3 py-2 text-sm"
-            value={form.description}
-            onChange={(e) => setForm({ ...form, description: e.target.value })}
+            value={form.audio_url}
+            onChange={(e) => setForm({ ...form, audio_url: e.target.value })}
           />
-          <label className="block text-sm">
-            <span className="font-medium text-slate-700">Video URL (YouTube recommended)</span>
-            <input
-              className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
-              placeholder="https://youtube.com/watch?v=… or /shorts/…"
-              value={form.video_url}
-              onChange={(e) => setForm({ ...form, video_url: e.target.value })}
-            />
-          </label>
-          <label className="block text-sm">
-            <span className="font-medium text-slate-700">Audio URL (optional MP3)</span>
-            <input
-              className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
-              placeholder="https://….mp3"
-              value={form.audio_url}
-              onChange={(e) => setForm({ ...form, audio_url: e.target.value })}
-            />
-          </label>
           <label className="flex items-center gap-2 text-sm">
             <input
               type="checkbox"
               checked={form.is_published}
               onChange={(e) => setForm({ ...form, is_published: e.target.checked })}
             />
-            Publish immediately
+            Published
           </label>
           <button
             type="submit"
             disabled={saving}
             className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
           >
-            {saving ? "Saving…" : "Save to library"}
+            {saving ? "Saving…" : editId ? "Save changes" : "Save"}
           </button>
         </form>
       )}
@@ -188,7 +205,7 @@ export default function AdminMediaPage() {
       <ul className="divide-y rounded-xl border bg-white">
         {items.map((item) => (
           <li key={item.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
-            <div>
+            <div className="min-w-0">
               <p className="font-medium text-slate-900">{item.title}</p>
               <p className="text-xs text-slate-500">
                 {item.media_type}
@@ -196,15 +213,29 @@ export default function AdminMediaPage() {
                 {item.is_published ? " · published" : " · draft"}
               </p>
             </div>
-            {!item.is_published && (
-              <button
-                type="button"
-                onClick={() => publish(item.id)}
+            <div className="flex flex-wrap gap-2">
+              <Link
+                href="/sermons"
+                target="_blank"
                 className="rounded border px-2 py-1 text-xs font-semibold"
               >
-                Publish
+                View
+              </Link>
+              <button
+                type="button"
+                onClick={() => openEdit(item)}
+                className="rounded border px-2 py-1 text-xs font-semibold"
+              >
+                Edit
               </button>
-            )}
+              <button
+                type="button"
+                onClick={() => remove(item.id)}
+                className="rounded border border-red-200 px-2 py-1 text-xs font-semibold text-red-600"
+              >
+                Delete
+              </button>
+            </div>
           </li>
         ))}
         {!loading && items.length === 0 && (

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { apiFetch } from "@/lib/api";
 
 type Session = {
@@ -8,11 +9,8 @@ type Session = {
   title: string;
   description: string | null;
   status: string;
-  stream_key: string | null;
-  mux_playback_id: string | null;
-  playback_url: string | null;
   youtube_url: string | null;
-  scheduled_start: string | null;
+  playback_url: string | null;
 };
 
 export default function AdminLivestreamPage() {
@@ -20,12 +18,8 @@ export default function AdminLivestreamPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({
-    title: "",
-    description: "",
-    youtube_url: "",
-    scheduled_start: "",
-  });
+  const [editId, setEditId] = useState<number | null>(null);
+  const [form, setForm] = useState({ title: "", description: "", youtube_url: "" });
   const [saving, setSaving] = useState(false);
 
   function load() {
@@ -40,30 +34,56 @@ export default function AdminLivestreamPage() {
     load();
   }, []);
 
-  async function handleCreate(e: React.FormEvent) {
+  function openEdit(s: Session) {
+    setEditId(s.id);
+    setForm({
+      title: s.title,
+      description: s.description || "",
+      youtube_url: s.youtube_url || "",
+    });
+    setShowForm(true);
+  }
+
+  async function handleSave(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
     setError("");
     try {
-      await apiFetch<Session>("/livestream/sessions", {
-        method: "POST",
-        body: JSON.stringify({
-          title: form.title,
-          description: form.description || null,
-          youtube_url: form.youtube_url || null,
-          scheduled_start: form.scheduled_start
-            ? new Date(form.scheduled_start).toISOString()
-            : null,
-          is_public: true,
-        }),
-      });
+      const body = {
+        title: form.title,
+        description: form.description || null,
+        youtube_url: form.youtube_url || null,
+        is_public: true,
+      };
+      if (editId) {
+        await apiFetch(`/livestream/sessions/${editId}`, {
+          method: "PATCH",
+          body: JSON.stringify(body),
+        });
+      } else {
+        await apiFetch("/livestream/sessions", {
+          method: "POST",
+          body: JSON.stringify(body),
+        });
+      }
       setShowForm(false);
-      setForm({ title: "", description: "", youtube_url: "", scheduled_start: "" });
+      setEditId(null);
+      setForm({ title: "", description: "", youtube_url: "" });
       load();
     } catch (err: any) {
       setError(err.message);
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function remove(id: number) {
+    if (!confirm("Delete this session?")) return;
+    try {
+      await apiFetch(`/livestream/sessions/${id}`, { method: "DELETE" });
+      load();
+    } catch (err: any) {
+      setError(err.message);
     }
   }
 
@@ -91,69 +111,63 @@ export default function AdminLivestreamPage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Livestream</h1>
           <p className="mt-1 text-sm text-slate-500">
-            Paste a YouTube live (or video) URL, then press <strong>Go live</strong> so it appears on /live.
+            Paste a YouTube URL, <strong>Go live</strong>, then open the public page.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => setShowForm((v) => !v)}
-          className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
-        >
-          {showForm ? "Cancel" : "New session"}
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <Link
+            href="/live"
+            target="_blank"
+            className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700"
+          >
+            View /live
+          </Link>
+          <button
+            type="button"
+            onClick={() => {
+              setEditId(null);
+              setForm({ title: "", description: "", youtube_url: "" });
+              setShowForm((v) => !v);
+            }}
+            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
+          >
+            {showForm && !editId ? "Cancel" : "New session"}
+          </button>
+        </div>
       </div>
 
-      {error && (
-        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
-      )}
+      {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
 
       {showForm && (
-        <form onSubmit={handleCreate} className="space-y-3 rounded-xl border bg-white p-4 shadow-sm">
-          <label className="block text-sm">
-            <span className="font-medium text-slate-700">Title</span>
-            <input
-              required
-              className="mt-1 w-full rounded-lg border px-3 py-2"
-              value={form.title}
-              onChange={(e) => setForm({ ...form, title: e.target.value })}
-              placeholder="Sunday Service Live"
-            />
-          </label>
-          <label className="block text-sm">
-            <span className="font-medium text-slate-700">YouTube URL</span>
-            <input
-              className="mt-1 w-full rounded-lg border px-3 py-2"
-              value={form.youtube_url}
-              onChange={(e) => setForm({ ...form, youtube_url: e.target.value })}
-              placeholder="https://www.youtube.com/watch?v=… or youtu.be/…"
-            />
-            <span className="mt-1 block text-xs text-slate-400">
-              Works with watch links, youtu.be, or YouTube Live links. No Mux key required for YouTube.
-            </span>
-          </label>
-          <label className="block text-sm">
-            <span className="font-medium text-slate-700">Description (optional)</span>
-            <textarea
-              className="mt-1 w-full rounded-lg border px-3 py-2"
-              value={form.description}
-              onChange={(e) => setForm({ ...form, description: e.target.value })}
-            />
-          </label>
-          <label className="block text-sm">
-            <span className="font-medium text-slate-700">Scheduled start (optional)</span>
-            <input
-              type="datetime-local"
-              className="mt-1 w-full rounded-lg border px-3 py-2"
-              value={form.scheduled_start}
-              onChange={(e) => setForm({ ...form, scheduled_start: e.target.value })}
-            />
-          </label>
+        <form onSubmit={handleSave} className="space-y-3 rounded-xl border bg-white p-4 shadow-sm">
+          <p className="text-sm font-semibold text-slate-700">
+            {editId ? `Edit session #${editId}` : "New session"}
+          </p>
+          <input
+            required
+            placeholder="Title"
+            className="w-full rounded-lg border px-3 py-2"
+            value={form.title}
+            onChange={(e) => setForm({ ...form, title: e.target.value })}
+          />
+          <input
+            placeholder="YouTube URL"
+            className="w-full rounded-lg border px-3 py-2"
+            value={form.youtube_url}
+            onChange={(e) => setForm({ ...form, youtube_url: e.target.value })}
+          />
+          <textarea
+            placeholder="Description"
+            className="w-full rounded-lg border px-3 py-2"
+            value={form.description}
+            onChange={(e) => setForm({ ...form, description: e.target.value })}
+          />
           <button
             type="submit"
             disabled={saving}
             className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
           >
-            {saving ? "Saving…" : "Create session"}
+            {saving ? "Saving…" : editId ? "Save changes" : "Create session"}
           </button>
         </form>
       )}
@@ -164,21 +178,53 @@ export default function AdminLivestreamPage() {
         {sessions.map((s) => (
           <li key={s.id} className="rounded-xl border bg-white p-4 shadow-sm">
             <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
+              <div className="min-w-0 flex-1">
                 <p className="font-semibold text-slate-900">{s.title}</p>
                 <p className="mt-0.5 text-xs uppercase tracking-wide text-slate-500">
-                  Status: <span className="font-semibold">{s.status}</span>
+                  Status:{" "}
+                  <span
+                    className={
+                      s.status === "live"
+                        ? "font-semibold text-red-600"
+                        : s.status === "ended"
+                          ? "font-semibold text-slate-500"
+                          : "font-semibold text-amber-600"
+                    }
+                  >
+                    {s.status}
+                  </span>
                 </p>
                 {s.youtube_url && (
-                  <p className="mt-1 break-all text-xs text-blue-600">{s.youtube_url}</p>
+                  <a
+                    href={s.youtube_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-1 block break-all text-xs text-blue-600"
+                  >
+                    {s.youtube_url}
+                  </a>
                 )}
               </div>
-              <div className="flex gap-2">
-                {s.status !== "live" && s.status !== "ended" && (
+              <div className="flex flex-wrap gap-2">
+                <Link
+                  href="/live"
+                  target="_blank"
+                  className="rounded-lg border px-3 py-1.5 text-xs font-semibold text-slate-700"
+                >
+                  View
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => openEdit(s)}
+                  className="rounded-lg border px-3 py-1.5 text-xs font-semibold text-slate-700"
+                >
+                  Edit
+                </button>
+                {s.status !== "live" && (
                   <button
                     type="button"
                     onClick={() => startSession(s.id)}
-                    className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700"
+                    className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white"
                   >
                     Go live
                   </button>
@@ -187,18 +233,25 @@ export default function AdminLivestreamPage() {
                   <button
                     type="button"
                     onClick={() => endSession(s.id)}
-                    className="rounded-lg border px-3 py-1.5 text-xs font-semibold text-slate-700"
+                    className="rounded-lg border px-3 py-1.5 text-xs font-semibold"
                   >
-                    End stream
+                    End
                   </button>
                 )}
+                <button
+                  type="button"
+                  onClick={() => remove(s.id)}
+                  className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-600"
+                >
+                  Delete
+                </button>
               </div>
             </div>
           </li>
         ))}
         {!loading && sessions.length === 0 && (
           <li className="rounded-xl border bg-white p-6 text-center text-sm text-slate-500">
-            No sessions yet. Create one with a YouTube URL.
+            No sessions yet.
           </li>
         )}
       </ul>
