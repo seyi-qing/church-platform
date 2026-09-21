@@ -13,6 +13,35 @@ type Photo = {
   is_published: boolean;
 };
 
+function Thumb({ src, title }: { src: string; title: string }) {
+  const [broken, setBroken] = useState(false);
+  if (broken || !src) {
+    return (
+      <div className="flex aspect-video w-full flex-col items-center justify-center gap-1 bg-slate-100 px-3 text-center">
+        <span className="text-2xl" aria-hidden>
+          🖼
+        </span>
+        <p className="text-xs font-medium text-slate-500">Image did not load</p>
+        <p className="max-w-full truncate text-[10px] text-slate-400">{src || "No URL"}</p>
+        <p className="text-[10px] text-amber-700">
+          Use a direct https image link (ends in .jpg/.png/.webp), not a web page.
+        </p>
+      </div>
+    );
+  }
+  return (
+    /* eslint-disable-next-line @next/next/no-img-element */
+    <img
+      src={src}
+      alt={title}
+      className="aspect-video w-full object-cover bg-slate-100"
+      onError={() => setBroken(true)}
+      loading="lazy"
+      referrerPolicy="no-referrer"
+    />
+  );
+}
+
 export default function AdminGalleryPage() {
   const [items, setItems] = useState<Photo[]>([]);
   const [error, setError] = useState("");
@@ -48,7 +77,7 @@ export default function AdminGalleryPage() {
         body: JSON.stringify({
           title: form.title,
           caption: form.caption || null,
-          image_url: form.image_url,
+          image_url: form.image_url.trim(),
           album: form.album || "General",
           is_published: form.is_published,
         }),
@@ -84,16 +113,17 @@ export default function AdminGalleryPage() {
         <div>
           <h1 className="text-2xl font-bold">Gallery</h1>
           <p className="mt-1 text-sm text-slate-500">
-            Paste public image URLs (Imgur, Drive share links that allow view, CDN, etc.). Shows on{" "}
-            <strong>/gallery</strong>.
+            Paste a <strong>direct</strong> image URL (https…jpg/png/webp). Page links from Google
+            Photos/Drive often fail.
           </p>
         </div>
         <Link
           href="/gallery"
           target="_blank"
-          className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700"
+          rel="noreferrer"
+          className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm"
         >
-          View gallery
+          View public gallery →
         </Link>
       </div>
 
@@ -109,7 +139,8 @@ export default function AdminGalleryPage() {
         />
         <input
           required
-          placeholder="Image URL (https://…)"
+          type="url"
+          placeholder="Image URL (https://…jpg or .png)"
           className="w-full rounded-lg border px-3 py-2 text-sm"
           value={form.image_url}
           onChange={(e) => setForm({ ...form, image_url: e.target.value })}
@@ -134,7 +165,7 @@ export default function AdminGalleryPage() {
             checked={form.is_published}
             onChange={(e) => setForm({ ...form, is_published: e.target.checked })}
           />
-          Published
+          Published (show on public site)
         </label>
         <button
           type="submit"
@@ -149,23 +180,53 @@ export default function AdminGalleryPage() {
       <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {items.map((p) => (
           <li key={p.id} className="overflow-hidden rounded-xl border bg-white shadow-sm">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={p.image_url} alt={p.title} className="aspect-video w-full object-cover" />
-            <div className="flex items-start justify-between gap-2 p-3">
-              <div className="min-w-0">
-                <p className="truncate font-medium text-slate-900">{p.title}</p>
-                <p className="text-xs text-slate-500">
-                  {p.album}
-                  {p.is_published ? " · published" : " · draft"}
-                </p>
+            <Thumb src={p.image_url} title={p.title} />
+            <div className="space-y-2 p-3">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="truncate font-medium text-slate-900">{p.title}</p>
+                  <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
+                    <span className="text-slate-500">{p.album}</span>
+                    {p.is_published ? (
+                      <span className="rounded-full bg-emerald-100 px-2 py-0.5 font-semibold text-emerald-800">
+                        published
+                      </span>
+                    ) : (
+                      <span className="rounded-full bg-slate-100 px-2 py-0.5 font-semibold text-slate-600">
+                        draft
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => remove(p.id)}
+                  className="shrink-0 text-xs font-semibold text-red-600"
+                >
+                  Delete
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={() => remove(p.id)}
-                className="shrink-0 text-xs font-semibold text-red-600"
-              >
-                Delete
-              </button>
+              <div className="flex flex-wrap gap-2">
+                <Link
+                  href="/gallery"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-700"
+                >
+                  View gallery
+                </Link>
+                <a
+                  href={p.image_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700"
+                >
+                  Open image URL
+                </a>
+              </div>
+              <p className="truncate text-[10px] text-slate-400" title={p.image_url}>
+                {p.image_url}
+              </p>
             </div>
           </li>
         ))}

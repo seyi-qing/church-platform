@@ -11,6 +11,28 @@ type Photo = {
   album: string;
 };
 
+function GridThumb({ src, title }: { src: string; title: string }) {
+  const [broken, setBroken] = useState(false);
+  if (broken) {
+    return (
+      <div className="flex aspect-square w-full items-center justify-center bg-slate-100 text-xs text-slate-400">
+        Unavailable
+      </div>
+    );
+  }
+  return (
+    /* eslint-disable-next-line @next/next/no-img-element */
+    <img
+      src={src}
+      alt={title}
+      className="aspect-square w-full object-cover transition group-hover:scale-[1.02]"
+      loading="lazy"
+      referrerPolicy="no-referrer"
+      onError={() => setBroken(true)}
+    />
+  );
+}
+
 export default function GalleryPage() {
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [albums, setAlbums] = useState<string[]>([]);
@@ -129,13 +151,7 @@ export default function GalleryPage() {
               onClick={() => setLightbox(p)}
               className="group overflow-hidden rounded-xl border bg-white text-left shadow-sm transition hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={p.image_url}
-                alt={p.title}
-                className="aspect-square w-full object-cover transition group-hover:scale-[1.02]"
-                loading="lazy"
-              />
+              <GridThumb src={p.image_url} title={p.title} />
               <div className="p-2">
                 <p className="truncate text-sm font-medium text-slate-900">{p.title}</p>
                 <p className="truncate text-[10px] uppercase tracking-wide text-slate-400">
@@ -172,6 +188,7 @@ export default function GalleryPage() {
               src={lightbox.image_url}
               alt={lightbox.title}
               className="max-h-[75vh] w-full object-contain"
+              referrerPolicy="no-referrer"
             />
             <div className="p-4">
               <h2 className="font-semibold text-slate-900">{lightbox.title}</h2>
