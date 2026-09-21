@@ -22,9 +22,20 @@ type EventItem = {
   start_at: string;
 };
 
+type Announcement = {
+  id: number;
+  title: string;
+  body: string;
+  is_published: boolean;
+  pinned: boolean;
+  created_at: string;
+};
+
 export default function HomePage() {
   const [sermons, setSermons] = useState<MediaItem[]>([]);
   const [events, setEvents] = useState<EventItem[]>([]);
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [dismissedPin, setDismissedPin] = useState(false);
 
   useEffect(() => {
     const ctrl = new AbortController();
@@ -43,14 +54,45 @@ export default function HomePage() {
       .then((d) => setEvents(Array.isArray(d) ? d : []))
       .catch(() => {});
 
+    fetch(`${API_URL}/announcements?published_only=true`, {
+      signal: ctrl.signal,
+      cache: "no-store",
+    })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((d) => setAnnouncements(Array.isArray(d) ? d : []))
+      .catch(() => {});
+
     return () => {
       clearTimeout(t);
       ctrl.abort();
     };
   }, []);
 
+  const pinned = announcements.find((a) => a.pinned) || announcements[0] || null;
+  const rest = announcements.filter((a) => !pinned || a.id !== pinned.id).slice(0, 4);
+
   return (
     <div className="space-y-12">
+      {pinned && !dismissedPin && (
+        <div className="relative rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 shadow-sm sm:px-5">
+          <div className="pr-8">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-amber-700">
+              {pinned.pinned ? "Pinned announcement" : "Announcement"}
+            </p>
+            <p className="mt-0.5 font-semibold text-slate-900">{pinned.title}</p>
+            <p className="mt-1 whitespace-pre-wrap text-sm text-slate-700">{pinned.body}</p>
+          </div>
+          <button
+            type="button"
+            aria-label="Dismiss announcement"
+            onClick={() => setDismissedPin(true)}
+            className="absolute right-2 top-2 rounded-lg px-2 py-1 text-sm text-slate-500 hover:bg-amber-100"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       <section className="rounded-2xl bg-blue-700 px-6 py-12 text-white shadow-lg sm:px-10 sm:py-16">
         <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
           Welcome to Grace Church
@@ -73,6 +115,38 @@ export default function HomePage() {
           </Link>
         </div>
       </section>
+
+      {announcements.length > 0 && (
+        <section>
+          <div className="mb-4">
+            <h2 className="text-2xl font-bold text-slate-900">Church updates</h2>
+            <p className="mt-1 text-sm text-slate-500">Announcements from the team</p>
+          </div>
+          <ul className="space-y-3">
+            {(pinned && !dismissedPin ? [pinned, ...rest] : announcements.slice(0, 5)).map((a) => (
+              <li
+                key={a.id}
+                className={`rounded-xl border bg-white p-5 shadow-sm ${
+                  a.pinned ? "border-amber-200" : ""
+                }`}
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  {a.pinned && (
+                    <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase text-amber-800">
+                      Pinned
+                    </span>
+                  )}
+                  <h3 className="font-semibold text-slate-900">{a.title}</h3>
+                </div>
+                <p className="mt-2 whitespace-pre-wrap text-sm text-slate-600">{a.body}</p>
+                <p className="mt-2 text-xs text-slate-400">
+                  {new Date(a.created_at).toLocaleDateString()}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <section>
         <div className="mb-4 flex items-end justify-between gap-4">
