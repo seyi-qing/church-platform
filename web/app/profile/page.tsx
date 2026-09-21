@@ -28,6 +28,26 @@ function money(cents: number | null | undefined) {
   return `$${(n / 100).toFixed(2)}`;
 }
 
+function StatusBadge({ status }: { status: string }) {
+  const s = (status || "").toLowerCase();
+  const styles: Record<string, string> = {
+    succeeded: "bg-emerald-50 text-emerald-700",
+    paid: "bg-emerald-50 text-emerald-700",
+    pending: "bg-amber-50 text-amber-800",
+    failed: "bg-red-50 text-red-700",
+    refunded: "bg-slate-100 text-slate-600",
+  };
+  return (
+    <span
+      className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold capitalize ${
+        styles[s] || "bg-slate-100 text-slate-600"
+      }`}
+    >
+      {status}
+    </span>
+  );
+}
+
 export default function ProfilePage() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
@@ -213,15 +233,16 @@ export default function ProfilePage() {
         {gifts.length > 0 && (
           <ul className="mt-4 divide-y">
             {gifts.map((g) => (
-              <li key={g.id} className="flex justify-between py-3 text-sm">
+              <li key={g.id} className="flex items-center justify-between gap-3 py-3 text-sm">
                 <div>
                   <p className="font-medium text-slate-900">
                     {money(g.amount_cents)} · {g.fund}
                   </p>
-                  <p className="text-xs text-slate-500">
-                    {new Date(g.created_at).toLocaleDateString()} · {g.status}
+                  <p className="mt-1 text-xs text-slate-500">
+                    {new Date(g.created_at).toLocaleDateString()}
                   </p>
                 </div>
+                <StatusBadge status={g.status} />
               </li>
             ))}
           </ul>

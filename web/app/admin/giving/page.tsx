@@ -20,6 +20,26 @@ function money(cents: number | null | undefined) {
   return `$${(n / 100).toFixed(2)}`;
 }
 
+function StatusBadge({ status }: { status: string }) {
+  const s = (status || "").toLowerCase();
+  const styles: Record<string, string> = {
+    succeeded: "bg-emerald-50 text-emerald-700",
+    paid: "bg-emerald-50 text-emerald-700",
+    pending: "bg-amber-50 text-amber-800",
+    failed: "bg-red-50 text-red-700",
+    refunded: "bg-slate-100 text-slate-600",
+  };
+  return (
+    <span
+      className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${
+        styles[s] || "bg-slate-100 text-slate-600"
+      }`}
+    >
+      {status}
+    </span>
+  );
+}
+
 export default function AdminGivingPage() {
   const [items, setItems] = useState<Donation[]>([]);
   const [error, setError] = useState("");
@@ -44,9 +64,7 @@ export default function AdminGivingPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-slate-900">Giving & tithes</h1>
-        <p className="text-sm text-slate-500">
-          Donations from /give (demo or Stripe). Amounts are stored in cents.
-        </p>
+        <p className="text-sm text-slate-500">Donations from /give (demo or Stripe).</p>
       </div>
 
       {error && (
@@ -74,27 +92,21 @@ export default function AdminGivingPage() {
         </div>
         <ul className="divide-y text-slate-700">
           {items.map((d) => (
-            <li key={d.id} className="flex items-center justify-between px-4 py-3 text-sm">
+            <li key={d.id} className="flex items-center justify-between gap-3 px-4 py-3 text-sm">
               <div>
                 <p className="font-semibold text-slate-900">
                   {money(d.amount_cents)} · <span className="text-blue-600">{d.fund || "General"}</span>
                 </p>
                 <p className="mt-0.5 text-xs text-slate-500">
-                  {d.donor_name || d.donor_email || "Anonymous"} ·{" "}
-                  <span
-                    className={`ml-1 rounded-full px-1.5 text-[10px] font-bold uppercase ${
-                      (d.status || "").toLowerCase() === "succeeded"
-                        ? "bg-emerald-50 text-emerald-700"
-                        : "bg-amber-50 text-amber-700"
-                    }`}
-                  >
-                    {d.status}
-                  </span>
+                  {d.donor_name || d.donor_email || "Anonymous"}
                 </p>
               </div>
-              <p className="text-xs font-medium text-slate-400">
-                {d.created_at ? new Date(d.created_at).toLocaleDateString() : ""}
-              </p>
+              <div className="flex flex-col items-end gap-1">
+                <StatusBadge status={d.status} />
+                <p className="text-xs text-slate-400">
+                  {d.created_at ? new Date(d.created_at).toLocaleDateString() : ""}
+                </p>
+              </div>
             </li>
           ))}
           {!loading && items.length === 0 && (

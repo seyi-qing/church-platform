@@ -64,6 +64,51 @@ export function Nav() {
     router.push("/");
   }
 
+  const accountMenuItems = (
+    <>
+      <div className="border-b border-slate-100 px-3 py-2">
+        <p className="truncate text-sm font-semibold text-slate-900">{user?.full_name}</p>
+        <p className="truncate text-xs text-slate-500">{user?.email}</p>
+      </div>
+      <Link
+        href="/profile"
+        role="menuitem"
+        className="block px-3 py-2.5 text-sm text-slate-800 hover:bg-slate-50"
+        onClick={() => setMenuOpen(false)}
+      >
+        My profile
+      </Link>
+      {staff && (
+        <Link
+          href="/admin"
+          role="menuitem"
+          className="block px-3 py-2.5 text-sm text-slate-800 hover:bg-slate-50"
+          onClick={() => setMenuOpen(false)}
+        >
+          Staff dashboard
+        </Link>
+      )}
+      {!staff && (
+        <Link
+          href="/give"
+          role="menuitem"
+          className="block px-3 py-2.5 text-sm text-slate-800 hover:bg-slate-50"
+          onClick={() => setMenuOpen(false)}
+        >
+          Give
+        </Link>
+      )}
+      <button
+        type="button"
+        role="menuitem"
+        onClick={signOut}
+        className="w-full px-3 py-2.5 text-left text-sm text-red-600 hover:bg-red-50"
+      >
+        Sign out
+      </button>
+    </>
+  );
+
   return (
     <header className="sticky top-0 z-50 border-b border-slate-200/80 bg-white/95 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/80">
       <a
@@ -81,7 +126,6 @@ export function Nav() {
           Grace Church
         </Link>
 
-        {/* Desktop public links */}
         <nav
           className="hidden items-center gap-1 text-sm font-medium text-slate-600 md:flex"
           aria-label="Main"
@@ -134,50 +178,17 @@ export function Nav() {
                   role="menu"
                   className="absolute right-0 mt-2 w-52 rounded-xl border border-slate-200 bg-white py-1 shadow-lg"
                 >
-                  <div className="border-b border-slate-100 px-3 py-2">
-                    <p className="truncate text-sm font-semibold text-slate-900">{user.full_name}</p>
-                    <p className="truncate text-xs text-slate-500">{user.email}</p>
-                  </div>
-                  <Link
-                    href="/profile"
-                    role="menuitem"
-                    className="block px-3 py-2.5 text-sm text-slate-800 hover:bg-slate-50"
-                    onClick={() => setMenuOpen(false)}
-                  >
-                    My profile
-                  </Link>
-                  {staff && (
-                    <Link
-                      href="/admin"
-                      role="menuitem"
-                      className="block px-3 py-2.5 text-sm text-slate-800 hover:bg-slate-50"
-                      onClick={() => setMenuOpen(false)}
-                    >
-                      Staff dashboard
-                    </Link>
-                  )}
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={signOut}
-                    className="w-full px-3 py-2.5 text-left text-sm text-red-600 hover:bg-red-50"
-                  >
-                    Sign out
-                  </button>
+                  {accountMenuItems}
                 </div>
               )}
             </div>
           )}
         </nav>
 
-        {/* Mobile: guests get site menu; signed-in get account avatar menu */}
         <div className="flex items-center gap-2 md:hidden">
           {!isLoggedIn && (
             <>
-              <Link
-                href="/login"
-                className="rounded-lg px-2 py-2 text-sm font-semibold text-slate-600"
-              >
+              <Link href="/login" className="rounded-lg px-2 py-2 text-sm font-semibold text-slate-600">
                 Sign in
               </Link>
               <button
@@ -208,7 +219,7 @@ export function Nav() {
               aria-expanded={menuOpen}
               aria-controls={menuId}
               onClick={() => setMenuOpen((v) => !v)}
-              className="flex items-center gap-1 rounded-full border border-slate-200 bg-white p-1 pr-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              className="flex items-center rounded-full border border-slate-200 bg-white p-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
             >
               <span className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-600 text-xs font-bold text-white">
                 {initials(user.full_name)}
@@ -218,13 +229,8 @@ export function Nav() {
         </div>
       </div>
 
-      {/* Mobile dropdown */}
       {menuOpen && (
-        <div
-          id={menuId}
-          className="border-t border-slate-100 bg-white px-3 py-3 md:hidden"
-          role="menu"
-        >
+        <div id={menuId} className="border-t border-slate-100 bg-white px-3 py-3 md:hidden" role="menu">
           {!isLoggedIn && (
             <nav className="space-y-1" aria-label="Mobile">
               {links.map((l) => {
@@ -248,53 +254,8 @@ export function Nav() {
           )}
 
           {isLoggedIn && user && (
-            <div className="space-y-1">
-              <div className="px-3 pb-2">
-                <p className="text-sm font-semibold text-slate-900">{user.full_name}</p>
-                <p className="text-xs text-slate-500">{user.email}</p>
-              </div>
-              <Link
-                href="/profile"
-                role="menuitem"
-                className="block rounded-lg px-3 py-3 text-base font-medium text-slate-800 hover:bg-slate-50"
-                onClick={() => setMenuOpen(false)}
-              >
-                My profile
-              </Link>
-              {staff && (
-                <Link
-                  href="/admin"
-                  role="menuitem"
-                  className="block rounded-lg px-3 py-3 text-base font-medium text-slate-800 hover:bg-slate-50"
-                  onClick={() => setMenuOpen(false)}
-                >
-                  Staff dashboard
-                </Link>
-              )}
-              <Link
-                href="/"
-                role="menuitem"
-                className="block rounded-lg px-3 py-3 text-base font-medium text-slate-800 hover:bg-slate-50"
-                onClick={() => setMenuOpen(false)}
-              >
-                Home
-              </Link>
-              <Link
-                href="/give"
-                role="menuitem"
-                className="block rounded-lg px-3 py-3 text-base font-medium text-slate-800 hover:bg-slate-50"
-                onClick={() => setMenuOpen(false)}
-              >
-                Give
-              </Link>
-              <button
-                type="button"
-                role="menuitem"
-                onClick={signOut}
-                className="w-full rounded-lg px-3 py-3 text-left text-base font-medium text-red-600 hover:bg-red-50"
-              >
-                Sign out
-              </button>
+            <div className="space-y-1 [&>a]:rounded-lg [&>a]:px-3 [&>a]:py-3 [&>a]:text-base [&>button]:rounded-lg [&>button]:px-3 [&>button]:py-3 [&>button]:text-base">
+              {accountMenuItems}
             </div>
           )}
         </div>
