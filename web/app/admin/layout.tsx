@@ -111,9 +111,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     return (
       <>
         <div className="border-b border-slate-800 p-4">
-          <div className="text-sm font-bold tracking-wide text-white">Church Admin</div>
+          <div className="text-sm font-bold tracking-wide text-white">Grace Church</div>
           <p className="mt-0.5 text-xs font-semibold uppercase tracking-wider text-blue-300">
-            {user.role}
+            Admin · {user.role}
           </p>
         </div>
         <nav className="mt-2 flex-1 space-y-3 overflow-y-auto px-2 pb-4" aria-label="Admin">
@@ -184,9 +184,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             </svg>
           </button>
           <div className="min-w-0 flex-1">
-            <div className="text-sm font-bold">Church Admin</div>
-            <div className="text-[10px] uppercase tracking-wider text-blue-300 lg:hidden">
-              {user.role}
+            <div className="text-sm font-bold">Grace Church</div>
+            <div className="text-[10px] uppercase tracking-wider text-blue-300">
+              Admin · {user.role}
             </div>
           </div>
 
@@ -248,7 +248,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               aria-label="Admin menu"
             >
               <div className="flex items-center justify-between border-b border-slate-800 p-4">
-                <span className="text-sm font-bold text-white">Menu</span>
+                <span className="text-sm font-bold text-white">Grace Church</span>
                 <button
                   type="button"
                   aria-label="Close menu"
