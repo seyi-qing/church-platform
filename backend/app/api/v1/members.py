@@ -51,6 +51,64 @@ async def list_users(db: DbSession, _: AdminUser, skip: int = 0, limit: int = 20
     return result.scalars().all()
 
 
+@router.get("/users/{user_id}")
+async def get_user_detail(user_id: int, db: DbSession, _: AdminUser):
+    """Staff view of a person: account + member profile + recent check-ins."""
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    prof_q = await db.execute(select(MemberProfile).where(MemberProfile.user_id == user.id))
+    profile = prof_q.scalar_one_or_none()
+
+    recent_attendance: list[dict] = []
+    if profile:
+        att = await db.execute(
+            select(Attendance)
+            .where(Attendance.member_id == profile.id)
+            .order_by(Attendance.checked_in_at.desc())
+            .limit(10)
+        )
+        for row in att.scalars().all():
+            recent_attendance.append(
+                {
+                    "id": row.id,
+                    "checked_in_at": row.checked_in_at.isoformat()
+                    if row.checked_in_at
+                    else None,
+                    "notes": row.notes,
+                    "event_id": row.event_id,
+                }
+            )
+
+    return {
+        "user": {
+            "id": user.id,
+            "email": user.email,
+            "full_name": user.full_name,
+            "phone": getattr(user, "phone", None),
+            "role": user.role,
+            "is_active": user.is_active,
+            "is_superuser": user.is_superuser,
+            "created_at": user.created_at.isoformat() if user.created_at else None,
+        },
+        "profile": {
+            "id": profile.id,
+            "membership_status": profile.membership_status,
+            "address": profile.address,
+            "notes": profile.notes,
+            "birthdate": profile.birthdate.isoformat() if profile.birthdate else None,
+            "baptism_date": profile.baptism_date.isoformat() if profile.baptism_date else None,
+            "photo_url": profile.photo_url,
+            "family_id": profile.family_id,
+        }
+        if profile
+        else None,
+        "recent_attendance": recent_attendance,
+    }
+
+
 @router.get("/directory")
 async def member_directory(
     db: DbSession, _: LeaderUser, q: str = "", limit: int = 30
@@ -126,7 +184,6 @@ async def update_user_staff(
     if "role" in data and data["role"] is not None:
         if data["role"] not in STAFF_CREATE_ROLES:
             raise HTTPException(status_code=400, detail="Invalid role")
-        # Prevent removing the last active admin
         if user.role == "admin" and data["role"] != "admin":
             admin_count = (
                 await db.execute(
@@ -179,7 +236,6 @@ async def update_user_staff(
 
 @router.delete("/users/{user_id}")
 async def delete_user_staff(user_id: int, db: DbSession, current_user: AdminUser):
-    """Hard-delete a user. Prefer deactivating via PATCH when possible."""
     if user_id == current_user.id:
         raise HTTPException(status_code=400, detail="You cannot delete yourself")
 
@@ -197,7 +253,6 @@ async def delete_user_staff(user_id: int, db: DbSession, current_user: AdminUser
         if len(admin_count) <= 1 and any(a.id == user.id for a in admin_count):
             raise HTTPException(status_code=400, detail="Cannot delete the last active admin")
 
-    # Remove member profile first if present (simple cascade for registry)
     prof = await db.execute(select(MemberProfile).where(MemberProfile.user_id == user.id))
     profile = prof.scalar_one_or_none()
     if profile:
@@ -385,7 +440,6 @@ async def update_my_account(
     db: DbSession,
     current_user: CurrentUser,
 ):
-    """Member/staff can update display name only — not email or password."""
     name = payload.get("full_name")
     if name is not None:
         name = str(name).strip()

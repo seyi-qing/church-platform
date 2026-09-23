@@ -12,6 +12,29 @@ type User = {
   phone?: string | null;
 };
 
+type UserDetail = {
+  user: User & {
+    is_superuser?: boolean;
+    created_at?: string | null;
+  };
+  profile: {
+    id: number;
+    membership_status: string;
+    address: string | null;
+    notes: string | null;
+    birthdate: string | null;
+    baptism_date: string | null;
+    photo_url: string | null;
+    family_id: number | null;
+  } | null;
+  recent_attendance: {
+    id: number;
+    checked_in_at: string | null;
+    notes: string | null;
+    event_id: number | null;
+  }[];
+};
+
 const ROLES = [
   { value: "member", label: "Member" },
   { value: "leader", label: "Leader" },
@@ -39,6 +62,9 @@ export default function AdminMembersPage() {
   const [info, setInfo] = useState("");
   const [loading, setLoading] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
+  const [viewId, setViewId] = useState<number | null>(null);
+  const [detail, setDetail] = useState<UserDetail | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
   const [editForm, setEditForm] = useState({
     full_name: "",
     phone: "",
@@ -60,6 +86,27 @@ export default function AdminMembersPage() {
     load();
   }, []);
 
+  async function openProfile(u: User) {
+    setViewId(u.id);
+    setDetail(null);
+    setDetailLoading(true);
+    setError("");
+    try {
+      const d = await apiFetch<UserDetail>(`/members/users/${u.id}`);
+      setDetail(d);
+    } catch (e: any) {
+      setError(e.message);
+      setViewId(null);
+    } finally {
+      setDetailLoading(false);
+    }
+  }
+
+  function closeProfile() {
+    setViewId(null);
+    setDetail(null);
+  }
+
   function openEdit(u: User) {
     setEditId(u.id);
     setEditForm({
@@ -71,6 +118,8 @@ export default function AdminMembersPage() {
     });
     setError("");
     setInfo("");
+    setViewId(null);
+    setDetail(null);
   }
 
   function cancelEdit() {
@@ -150,6 +199,7 @@ export default function AdminMembersPage() {
         body: JSON.stringify({ is_active: false }),
       });
       setInfo("User deactivated.");
+      if (viewId === u.id) closeProfile();
       await load();
     } catch (err: any) {
       setError(err.message);
@@ -168,6 +218,7 @@ export default function AdminMembersPage() {
       await apiFetch(`/members/users/${u.id}`, { method: "DELETE" });
       setInfo("User deleted.");
       if (editId === u.id) cancelEdit();
+      if (viewId === u.id) closeProfile();
       await load();
     } catch (err: any) {
       setError(err.message);
@@ -179,8 +230,8 @@ export default function AdminMembersPage() {
       <div>
         <h1 className="text-2xl font-bold text-slate-900">Members & Staff Registry</h1>
         <p className="text-sm text-slate-500">
-          Add, edit, deactivate, or delete accounts. Roles: member, leader, secretary, treasurer,
-          pastor, admin.
+          Tap a name to view their profile. Edit, deactivate, or delete from the list or profile
+          panel.
         </p>
       </div>
 
@@ -308,6 +359,130 @@ export default function AdminMembersPage() {
         </form>
       )}
 
+      {/* Profile panel */}
+      {(viewId || detailLoading) && (
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
+          <div className="mb-3 flex items-start justify-between gap-2">
+            <h2 className="text-lg font-bold text-slate-900">Member profile</h2>
+            <button
+              type="button"
+              onClick={closeProfile}
+              className="rounded-lg px-2 py-1 text-sm text-slate-500 hover:bg-slate-100"
+              aria-label="Close profile"
+            >
+              ✕
+            </button>
+          </div>
+          {detailLoading && <p className="text-sm text-slate-500">Loading…</p>}
+          {detail && (
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-blue-100 text-lg font-bold text-blue-700">
+                  {(detail.user.full_name || detail.user.email || "?").substring(0, 2).toUpperCase()}
+                </div>
+                <div>
+                  <p className="text-lg font-semibold text-slate-900">
+                    {detail.user.full_name || "Unnamed"}
+                  </p>
+                  <p className="text-sm text-slate-500">{detail.user.email}</p>
+                </div>
+                <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${roleBadgeClass(detail.user.role)}`}>
+                  {detail.user.role}
+                </span>
+                <span
+                  className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${
+                    detail.user.is_active
+                      ? "border border-emerald-200 bg-emerald-50 text-emerald-700"
+                      : "border border-red-200 bg-red-50 text-red-700"
+                  }`}
+                >
+                  {detail.user.is_active ? "Active" : "Inactive"}
+                </span>
+              </div>
+
+              <dl className="grid gap-3 text-sm sm:grid-cols-2">
+                <div>
+                  <dt className="text-xs uppercase text-slate-400">Phone</dt>
+                  <dd className="font-medium text-slate-800">{detail.user.phone || "—"}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs uppercase text-slate-400">Account created</dt>
+                  <dd className="font-medium text-slate-800">
+                    {detail.user.created_at
+                      ? new Date(detail.user.created_at).toLocaleDateString()
+                      : "—"}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs uppercase text-slate-400">Membership status</dt>
+                  <dd className="font-medium capitalize text-slate-800">
+                    {detail.profile?.membership_status || "—"}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs uppercase text-slate-400">Address</dt>
+                  <dd className="font-medium text-slate-800">{detail.profile?.address || "—"}</dd>
+                </div>
+                <div className="sm:col-span-2">
+                  <dt className="text-xs uppercase text-slate-400">Pastoral notes</dt>
+                  <dd className="mt-0.5 whitespace-pre-wrap text-slate-700">
+                    {detail.profile?.notes || "No notes yet."}
+                  </dd>
+                </div>
+              </dl>
+
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wide text-slate-400">
+                  Recent check-ins
+                </p>
+                {detail.recent_attendance.length === 0 ? (
+                  <p className="mt-1 text-sm text-slate-500">No attendance recorded yet.</p>
+                ) : (
+                  <ul className="mt-2 divide-y rounded-lg border">
+                    {detail.recent_attendance.map((a) => (
+                      <li key={a.id} className="flex justify-between px-3 py-2 text-sm">
+                        <span className="text-slate-700">
+                          {a.checked_in_at
+                            ? new Date(a.checked_in_at).toLocaleString()
+                            : "—"}
+                        </span>
+                        {a.notes && <span className="text-xs text-slate-500">{a.notes}</span>}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              <div className="flex flex-wrap gap-2 border-t pt-3">
+                <button
+                  type="button"
+                  onClick={() => openEdit(detail.user)}
+                  className="rounded-lg border px-3 py-1.5 text-sm font-semibold text-slate-700"
+                >
+                  Edit account
+                </button>
+                {detail.user.is_active && (
+                  <button
+                    type="button"
+                    onClick={() => deactivate(detail.user)}
+                    className="rounded-lg border border-amber-200 px-3 py-1.5 text-sm font-semibold text-amber-800"
+                  >
+                    Deactivate
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => remove(detail.user)}
+                  className="rounded-lg border border-red-200 px-3 py-1.5 text-sm font-semibold text-red-600"
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="overflow-hidden rounded-xl border bg-white shadow-sm">
         <div className="border-b bg-slate-50 px-4 py-3">
           <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
@@ -323,17 +498,23 @@ export default function AdminMembersPage() {
             users.map((u) => (
               <li
                 key={u.id}
-                className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 transition hover:bg-slate-50"
+                className={`flex flex-wrap items-center justify-between gap-3 px-4 py-3 transition hover:bg-slate-50 ${
+                  viewId === u.id ? "bg-blue-50/50" : ""
+                }`}
               >
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-slate-900">
+                <button
+                  type="button"
+                  onClick={() => openProfile(u)}
+                  className="min-w-0 flex-1 text-left"
+                >
+                  <p className="text-sm font-semibold text-brand-700 underline-offset-2 hover:underline">
                     {u.full_name || "Unnamed User"}
                   </p>
                   <p className="mt-0.5 text-xs text-slate-500">
                     {u.email}
                     {u.phone ? ` · ${u.phone}` : ""}
                   </p>
-                </div>
+                </button>
                 <div className="flex flex-wrap items-center gap-2">
                   <span
                     className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
