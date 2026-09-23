@@ -55,7 +55,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
       { href: "/admin/ai", label: "AI tools", roles: ["admin", "pastor"] },
       { href: "/admin/communications", label: "Communications", roles: ["admin", "pastor", "leader", "secretary"] },
       { href: "/admin/campuses", label: "Campuses", roles: ["admin", "pastor"] },
-      { href: "/admin/builder", label: "Website builder", roles: ["admin", "pastor"] },
+      { href: "/admin/pages", label: "Pages", roles: ["admin", "pastor"] },
     ],
   },
 ];
@@ -171,7 +171,7 @@ export default function AdminLayout({
             );
           })}
         </nav>
-        <div className="border-t border-slate-800 p-2 space-y-0.5">
+        <div className="space-y-0.5 border-t border-slate-800 p-2">
           <Link
             href="/"
             onClick={onNavigate}
@@ -256,7 +256,7 @@ export default function AdminLayout({
                   View public site
                 </Link>
                 <Link
-                  href="/me"
+                  href="/profile"
                   role="menuitem"
                   className="block px-3 py-2.5 text-sm hover:bg-slate-50"
                   onClick={() => setProfileOpen(false)}
