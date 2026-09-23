@@ -5,6 +5,7 @@ import Link from "next/link";
 import { API_URL } from "@/lib/api";
 import { BRAND } from "@/lib/brand";
 import { MediaThumb } from "@/components/MediaThumb";
+import { GalleryStrip } from "@/components/GalleryStrip";
 
 type MediaItem = {
   id: number;
@@ -80,12 +81,15 @@ export default function HomePage() {
       .then((d) => setAnnouncements(Array.isArray(d) ? d : []))
       .catch(() => {});
 
-    fetch(`${API_URL}/livestream/sessions/live`, {
+    fetch(`${API_URL}/livestream/sessions?status=live&limit=1`, {
       signal: ctrl.signal,
       cache: "no-store",
     })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => setLive(d && d.id ? d : null))
+      .then((r) => (r.ok ? r.json() : []))
+      .then((d) => {
+        const list = Array.isArray(d) ? d : [];
+        setLive(list[0] || null);
+      })
       .catch(() => {});
 
     fetch(`${API_URL}/gallery/photos?published_only=true&limit=12`, {
@@ -102,70 +106,62 @@ export default function HomePage() {
     };
   }, []);
 
-  const pinned = announcements.find((a) => a.pinned) || announcements[0] || null;
-  const rest = announcements.filter((a) => !pinned || a.id !== pinned.id).slice(0, 4);
+  const pinned = announcements.find((a) => a.pinned);
+  const rest = announcements.filter((a) => !a.pinned);
 
   return (
-    <div className="space-y-12">
-      {live && (
-        <Link
-          href="/live"
-          className="flex items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 shadow-sm transition hover:bg-red-100"
-        >
-          <div className="flex items-center gap-3">
-            <span className="relative flex h-3 w-3">
+    <div className="space-y-10">
+      {live && !dismissedPin && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+          <div className="flex items-center gap-2">
+            <span className="relative flex h-2.5 w-2.5">
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75" />
-              <span className="relative inline-flex h-3 w-3 rounded-full bg-red-600" />
+              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-red-600" />
             </span>
             <div>
-              <p className="text-xs font-bold uppercase tracking-wide text-red-700">We're live</p>
-              <p className="text-sm font-semibold text-slate-900">{live.title}</p>
+              <p className="text-[10px] font-bold uppercase tracking-wide text-red-700">We're live</p>
+              <p className="text-sm font-semibold text-slate-900">{live.title || "Join us now"}</p>
             </div>
           </div>
-          <span className="shrink-0 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-bold text-white">
-            Watch
-          </span>
-        </Link>
-      )}
-
-      {pinned && !dismissedPin && (
-        <div className="relative rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 shadow-sm sm:px-5">
-          <div className="pr-8">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-amber-700">
-              {pinned.pinned ? "Pinned announcement" : "Announcement"}
-            </p>
-            <p className="mt-0.5 font-semibold text-slate-900">{pinned.title}</p>
-            <p className="mt-1 whitespace-pre-wrap text-sm text-slate-700">{pinned.body}</p>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/live"
+              className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700"
+            >
+              Watch
+            </Link>
+            <button
+              type="button"
+              onClick={() => setDismissedPin(true)}
+              className="rounded-lg px-2 py-1 text-xs text-slate-500 hover:bg-red-100"
+              aria-label="Dismiss"
+            >
+              ✕
+            </button>
           </div>
-          <button
-            type="button"
-            aria-label="Dismiss announcement"
-            onClick={() => setDismissedPin(true)}
-            className="absolute right-2 top-2 rounded-lg px-2 py-1 text-sm text-slate-500 hover:bg-amber-100"
-          >
-            ✕
-          </button>
         </div>
       )}
 
-      <section className="overflow-hidden rounded-2xl bg-gradient-to-br from-brand-800 via-brand-700 to-brand-600 px-6 py-12 text-center text-white shadow-lg sm:px-10 sm:py-16 sm:text-left">
-        <h1 className="text-3xl font-bold tracking-tight sm:text-4xl md:text-5xl">
+      <section className="rounded-2xl bg-gradient-to-br from-brand-700 to-blue-800 px-6 py-12 text-center text-white shadow-lg sm:px-10 sm:py-14">
+        <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl">
           Welcome to {BRAND.name}
         </h1>
-        <p className="mx-auto mt-4 max-w-xl text-lg text-blue-100 sm:mx-0">{BRAND.tagline}</p>
-        <p className="mx-auto mt-2 max-w-xl text-sm text-blue-200/90 sm:mx-0">
+        <p className="mx-auto mt-3 max-w-md text-base text-blue-100 sm:text-lg">
+          A community following Jesus together
+        </p>
+        <p className="mx-auto mt-2 max-w-lg text-sm text-blue-100/90">
           Join us this Sunday in person or online. Grow in faith, serve together, and find community.
         </p>
-        <div className="mt-8 flex flex-wrap justify-center gap-3 sm:justify-start">
+        <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
           <Link
             href="/live"
-            className="rounded-lg bg-white px-6 py-3 text-sm font-bold text-brand-800 shadow hover:bg-blue-50"
+            className="rounded-lg bg-white px-6 py-3 text-sm font-semibold text-brand-800 shadow hover:bg-blue-50"
           >
             Watch Live
           </Link>
           <Link
             href="/sermons"
-            className="rounded-lg border border-white/40 bg-white/10 px-6 py-3 text-sm font-semibold text-white backdrop-blur hover:bg-white/20"
+            className="rounded-lg border border-white/40 px-6 py-3 text-sm font-semibold text-white hover:bg-white/10"
           >
             Sermons
           </Link>
@@ -184,39 +180,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Photo strip instead of redundant shortcut cards */}
-      {photos.length > 0 && (
-        <section>
-          <div className="mb-3 flex items-end justify-between gap-4">
-            <div>
-              <h2 className="text-xl font-bold text-slate-900">Life at {BRAND.name}</h2>
-              <p className="text-sm text-slate-500">From our gallery</p>
-            </div>
-            <Link href="/gallery" className="text-sm font-semibold text-brand-600 hover:underline">
-              Full gallery
-            </Link>
-          </div>
-          <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-2 snap-x snap-mandatory">
-            {photos.map((p) => (
-              <Link
-                key={p.id}
-                href="/gallery"
-                className="w-[72%] shrink-0 snap-center overflow-hidden rounded-xl border bg-white shadow-sm sm:w-[40%] md:w-[28%]"
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={p.image_url}
-                  alt={p.title}
-                  className="aspect-[4/3] w-full object-cover"
-                  loading="lazy"
-                  referrerPolicy="no-referrer"
-                />
-                <p className="truncate px-3 py-2 text-sm font-medium text-slate-800">{p.title}</p>
-              </Link>
-            ))}
-          </div>
-        </section>
-      )}
+      {photos.length > 0 && <GalleryStrip photos={photos} brandName={BRAND.name} />}
 
       {announcements.length > 0 && (
         <section>
@@ -261,30 +225,26 @@ export default function HomePage() {
           </Link>
         </div>
         {sermons.length === 0 ? (
-          <p className="rounded-xl border bg-white p-6 text-sm text-slate-500">
-            No published messages yet. Staff can add them in Admin → Media.
+          <p className="rounded-xl border border-dashed bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
+            No sermons published yet.
           </p>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-3">
-            {sermons.slice(0, 3).map((s) => (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {sermons.map((m) => (
               <Link
-                key={s.id}
+                key={m.id}
                 href="/sermons"
                 className="overflow-hidden rounded-xl border bg-white shadow-sm transition hover:shadow-md"
               >
                 <MediaThumb
-                  title={s.title}
-                  thumbnail_url={s.thumbnail_url}
-                  video_url={s.video_url}
-                  media_type={s.media_type}
-                  hasAudio={!!s.audio_url}
+                  title={m.title}
+                  mediaType={m.media_type}
+                  videoUrl={m.video_url}
+                  thumbnailUrl={m.thumbnail_url}
                 />
-                <div className="p-4">
-                  <h3 className="font-semibold text-slate-900">{s.title}</h3>
-                  {s.speaker && <p className="mt-1 text-sm text-slate-500">{s.speaker}</p>}
-                  {s.description && (
-                    <p className="mt-2 line-clamp-2 text-sm text-slate-600">{s.description}</p>
-                  )}
+                <div className="p-3">
+                  <p className="font-semibold text-slate-900">{m.title}</p>
+                  {m.speaker && <p className="text-xs text-slate-500">{m.speaker}</p>}
                 </div>
               </Link>
             ))}
@@ -296,49 +256,32 @@ export default function HomePage() {
         <div className="mb-4 flex items-end justify-between gap-4">
           <div>
             <h2 className="text-2xl font-bold text-slate-900">Upcoming events</h2>
-            <p className="mt-1 text-sm text-slate-500">Gatherings and ways to get involved</p>
+            <p className="mt-1 text-sm text-slate-500">Plan your week with us</p>
           </div>
           <Link href="/events" className="text-sm font-semibold text-brand-600 hover:underline">
-            View all
+            All events
           </Link>
         </div>
         {events.length === 0 ? (
-          <p className="rounded-xl border bg-white p-6 text-sm text-slate-500">
-            No upcoming events listed yet.
+          <p className="rounded-xl border border-dashed bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
+            No upcoming events listed.
           </p>
         ) : (
           <ul className="space-y-3">
             {events.map((e) => (
-              <li key={e.id} className="rounded-xl border bg-white p-5 shadow-sm">
-                <h3 className="font-semibold text-slate-900">{e.title}</h3>
+              <li key={e.id} className="rounded-xl border bg-white p-4 shadow-sm">
+                <p className="font-semibold text-slate-900">{e.title}</p>
                 <p className="mt-1 text-sm text-slate-500">
                   {new Date(e.start_at).toLocaleString()}
                   {e.location ? ` · ${e.location}` : ""}
                 </p>
-                {e.description && <p className="mt-2 text-sm text-slate-600">{e.description}</p>}
-                <Link
-                  href="/events"
-                  className="mt-3 inline-block text-sm font-semibold text-brand-600 hover:underline"
-                >
-                  RSVP / details →
-                </Link>
+                {e.description && (
+                  <p className="mt-2 line-clamp-2 text-sm text-slate-600">{e.description}</p>
+                )}
               </li>
             ))}
           </ul>
         )}
-      </section>
-
-      <section className="rounded-2xl border border-brand-100 bg-gradient-to-r from-brand-50 to-white p-8 text-center shadow-sm">
-        <h2 className="text-xl font-bold text-slate-900">Support the mission</h2>
-        <p className="mx-auto mt-2 max-w-md text-sm text-slate-600">
-          Your generosity fuels worship, outreach, and care in our community.
-        </p>
-        <Link
-          href="/give"
-          className="mt-5 inline-flex rounded-lg bg-brand-700 px-8 py-3 text-sm font-bold text-white shadow hover:bg-brand-800"
-        >
-          Give online
-        </Link>
       </section>
     </div>
   );
