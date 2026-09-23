@@ -238,9 +238,9 @@ export default function HomePage() {
               >
                 <MediaThumb
                   title={m.title}
-                  mediaType={m.media_type}
-                  videoUrl={m.video_url}
-                  thumbnailUrl={m.thumbnail_url}
+                  media_type={m.media_type}
+                  video_url={m.video_url}
+                  thumbnail_url={m.thumbnail_url}
                 />
                 <div className="p-3">
                   <p className="font-semibold text-slate-900">{m.title}</p>
@@ -282,6 +282,19 @@ export default function HomePage() {
             ))}
           </ul>
         )}
+      </section>
+
+      <section className="rounded-2xl border border-blue-100 bg-gradient-to-b from-blue-50 to-white px-6 py-10 text-center shadow-sm">
+        <h2 className="text-xl font-bold text-slate-900">Support the mission</h2>
+        <p className="mx-auto mt-2 max-w-md text-sm text-slate-600">
+          Your generosity fuels worship, outreach, and care in our community.
+        </p>
+        <Link
+          href="/give"
+          className="mt-5 inline-block rounded-lg bg-brand-600 px-6 py-3 text-sm font-semibold text-white hover:bg-brand-700"
+        >
+          Give online
+        </Link>
       </section>
     </div>
   );
