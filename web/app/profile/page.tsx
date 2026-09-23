@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
-import { clearAuth, getStoredUser, isLoggedIn, isStaffRole } from "@/lib/auth";
+import { clearAuth, getStoredUser, isLoggedIn, isStaffRole, setAuth, getAccessToken, getRefreshToken } from "@/lib/auth";
 
 type Donation = {
   id: number;
@@ -55,6 +55,7 @@ export default function ProfilePage() {
   const [loadingGifts, setLoadingGifts] = useState(true);
   const [giftError, setGiftError] = useState("");
   const [profile, setProfile] = useState<MemberProfile | null>(null);
+  const [fullName, setFullName] = useState("");
   const [address, setAddress] = useState("");
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
@@ -66,7 +67,9 @@ export default function ProfilePage() {
       router.replace("/login");
       return;
     }
-    setUser(getStoredUser());
+    const u = getStoredUser();
+    setUser(u);
+    setFullName(u?.full_name || "");
 
     apiFetch<Donation[]>("/giving/mine")
       .then(setGifts)
@@ -88,6 +91,18 @@ export default function ProfilePage() {
     setSaveMsg("");
     setSaveErr("");
     try {
+      if (fullName.trim() && fullName.trim() !== user?.full_name) {
+        const updatedUser = await apiFetch<any>("/members/me/account", {
+          method: "PATCH",
+          body: JSON.stringify({ full_name: fullName.trim() }),
+        });
+        const access = getAccessToken();
+        const refresh = getRefreshToken();
+        if (access && refresh) {
+          setAuth(access, refresh, { ...user, ...updatedUser });
+        }
+        setUser((prev: any) => ({ ...prev, ...updatedUser }));
+      }
       const updated = await apiFetch<MemberProfile>("/members/me/profile", {
         method: "PATCH",
         body: JSON.stringify({ address: address || null, notes: notes || null }),
@@ -109,44 +124,47 @@ export default function ProfilePage() {
   const portalLabel = staff ? "Staff account" : "Member portal";
 
   return (
-    <div className="mx-auto max-w-lg space-y-6">
-      <div className="rounded-2xl border bg-white p-6 shadow-sm">
-        <div className="flex flex-col items-center text-center">
-          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-blue-100 text-xl font-bold text-blue-700">
+    <div className="mx-auto w-full max-w-3xl space-y-6 lg:max-w-4xl">
+      <div className="rounded-2xl border bg-white p-6 shadow-sm sm:p-8">
+        <div className="flex flex-col items-center text-center sm:flex-row sm:items-start sm:text-left sm:gap-6">
+          <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-blue-100 text-xl font-bold text-blue-700">
             {initials}
           </div>
-          <h1 className="mt-3 text-xl font-bold text-slate-900">{user.full_name}</h1>
-          <span
-            className={`mt-1 rounded-full px-3 py-0.5 text-xs font-semibold uppercase ${
-              staff ? "bg-indigo-100 text-indigo-800" : "bg-slate-100 text-slate-600"
-            }`}
-          >
-            {portalLabel}
-          </span>
+          <div className="mt-3 min-w-0 flex-1 sm:mt-0">
+            <h1 className="text-xl font-bold text-slate-900">{user.full_name}</h1>
+            <span
+              className={`mt-1 inline-block rounded-full px-3 py-0.5 text-xs font-semibold uppercase ${
+                staff ? "bg-indigo-100 text-indigo-800" : "bg-slate-100 text-slate-600"
+              }`}
+            >
+              {portalLabel}
+            </span>
+            <dl className="mt-4 grid gap-4 border-t pt-4 text-left text-sm sm:grid-cols-3">
+              <div>
+                <dt className="text-xs uppercase tracking-wide text-slate-400">Email address</dt>
+                <dd className="mt-0.5 break-all font-medium text-slate-800">{user.email}</dd>
+                <p className="mt-0.5 text-[10px] text-slate-400">Email cannot be changed here</p>
+              </div>
+              <div>
+                <dt className="text-xs uppercase tracking-wide text-slate-400">Registry status</dt>
+                <dd className="mt-1 flex items-center gap-1.5 font-medium">
+                  <span
+                    className={`inline-block h-2 w-2 rounded-full ${
+                      statusLabel === "active" ? "bg-green-500" : "bg-slate-400"
+                    }`}
+                  />
+                  <span className={statusLabel === "active" ? "text-green-700" : "text-slate-600"}>
+                    {statusLabel === "active" ? "Active" : statusLabel}
+                  </span>
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs uppercase tracking-wide text-slate-400">Role</dt>
+                <dd className="mt-0.5 font-medium capitalize text-slate-800">{user.role}</dd>
+              </div>
+            </dl>
+          </div>
         </div>
-        <dl className="mt-6 grid grid-cols-2 gap-4 border-t pt-4 text-left text-sm">
-          <div>
-            <dt className="text-xs uppercase tracking-wide text-slate-400">Email address</dt>
-            <dd className="mt-0.5 break-all font-medium text-slate-800">{user.email}</dd>
-          </div>
-          <div>
-            <dt className="text-xs uppercase tracking-wide text-slate-400">Registry status</dt>
-            <dd className="mt-1 flex items-center gap-1.5 font-medium">
-              <span
-                className={`inline-block h-2 w-2 rounded-full ${
-                  statusLabel === "active" ? "bg-green-500" : "bg-slate-400"
-                }`}
-              />
-              <span className={statusLabel === "active" ? "text-green-700" : "text-slate-600"}>
-                {statusLabel === "active" ? "Active" : statusLabel}
-              </span>
-            </dd>
-          </div>
-          <div>
-            <dt className="text-xs uppercase tracking-wide text-slate-400">Role</dt>
-            <dd className="mt-0.5 font-medium capitalize text-slate-800">{user.role}</dd>
-          </div>
-        </dl>
         <div className="mt-4 flex flex-wrap gap-2">
           <Link
             href="/give"
@@ -175,14 +193,23 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      <div className="rounded-2xl border bg-white p-6 shadow-sm">
+      <div className="rounded-2xl border bg-white p-6 shadow-sm sm:p-8">
         <h2 className="text-lg font-semibold text-slate-900">Personal information</h2>
         <p className="mt-1 text-sm text-slate-500">
-          Update your address and notes for pastoral care.
+          Update your display name and address. Email and password are not changed here.
         </p>
         <form onSubmit={savePersonal} className="mt-4 space-y-4">
           <label className="block text-sm">
-            <span className="font-medium text-slate-700">Home address location</span>
+            <span className="font-medium text-slate-700">Full name</span>
+            <input
+              className="mt-1 w-full rounded-lg border px-3 py-2"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              required
+            />
+          </label>
+          <label className="block text-sm">
+            <span className="font-medium text-slate-700">Home address</span>
             <input
               className="mt-1 w-full rounded-lg border px-3 py-2"
               placeholder="E.g. 123 Church Street, Kampala"
@@ -213,7 +240,7 @@ export default function ProfilePage() {
         </form>
       </div>
 
-      <div className="rounded-2xl border bg-white p-6 shadow-sm">
+      <div className="rounded-2xl border bg-white p-6 shadow-sm sm:p-8">
         <h2 className="text-lg font-semibold text-slate-900">My giving</h2>
         <p className="mt-1 text-sm text-slate-500">
           Gifts recorded while signed in on this account.
