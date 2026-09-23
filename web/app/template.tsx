@@ -6,6 +6,19 @@ import { Nav } from "@/components/Nav";
 import { WebPushBanner } from "@/components/WebPushToggle";
 import { ContactSection } from "@/components/ContactSection";
 
+const FOOTER_LINKS = [
+  { href: "/contact", label: "Contact" },
+  { href: "/give", label: "Give" },
+  { href: "/events", label: "Events" },
+  { href: "/live", label: "Live" },
+  { href: "/sermons", label: "Sermons" },
+] as const;
+
+function footerActive(pathname: string, href: string) {
+  if (href === "/") return pathname === "/";
+  return pathname === href || pathname.startsWith(href + "/");
+}
+
 export default function PublicVisitorTemplate({
   children,
 }: {
@@ -35,21 +48,23 @@ export default function PublicVisitorTemplate({
       <footer className="border-t border-slate-200 bg-white py-8">
         <div className="mx-auto flex max-w-6xl flex-col items-center gap-3 px-4 text-center text-sm text-slate-500">
           <nav className="flex flex-wrap justify-center gap-x-4 gap-y-1" aria-label="Footer">
-            <Link href="/contact" className="font-medium text-brand-700 hover:underline">
-              Contact
-            </Link>
-            <Link href="/give" className="hover:text-slate-800 hover:underline">
-              Give
-            </Link>
-            <Link href="/events" className="hover:text-slate-800 hover:underline">
-              Events
-            </Link>
-            <Link href="/live" className="hover:text-slate-800 hover:underline">
-              Live
-            </Link>
-            <Link href="/sermons" className="hover:text-slate-800 hover:underline">
-              Sermons
-            </Link>
+            {FOOTER_LINKS.map(({ href, label }) => {
+              const active = footerActive(pathname, href);
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  aria-current={active ? "page" : undefined}
+                  className={
+                    active
+                      ? "font-semibold text-brand-700 underline underline-offset-4 decoration-brand-600"
+                      : "hover:text-slate-800 hover:underline"
+                  }
+                >
+                  {label}
+                </Link>
+              );
+            })}
           </nav>
           <p>© {new Date().getFullYear()} Grace Church</p>
         </div>

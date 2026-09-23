@@ -11,8 +11,7 @@ export type GalleryStripPhoto = {
 };
 
 /**
- * Horizontal gallery strip with reliable auto-advance via scrollLeft
- * (scrollIntoView is unreliable inside overflow containers on mobile).
+ * Horizontal gallery strip with reliable auto-advance via scrollLeft.
  */
 export function GalleryStrip({
   photos,
@@ -43,7 +42,6 @@ export function GalleryStrip({
       const n = ((i % el.children.length) + el.children.length) % el.children.length;
       const child = el.children[n] as HTMLElement;
       if (!child) return;
-      // Scroll the strip container only — not the whole page
       const left = child.offsetLeft - (el.clientWidth - child.clientWidth) / 2;
       el.scrollTo({
         left: Math.max(0, left),
@@ -59,7 +57,6 @@ export function GalleryStrip({
     const id = window.setInterval(() => {
       setIndex((prev) => {
         const next = (prev + 1) % photos.length;
-        // Defer DOM scroll to next tick so state stays in sync
         requestAnimationFrame(() => {
           const el = scrollerRef.current;
           if (!el || !el.children[next]) return;
@@ -76,7 +73,6 @@ export function GalleryStrip({
   function onTouchPause() {
     setPaused(true);
     if (touchPauseTimer.current) clearTimeout(touchPauseTimer.current);
-    // Resume auto-slide a few seconds after user stops interacting
     touchPauseTimer.current = setTimeout(() => setPaused(false), 6000);
   }
 
@@ -101,7 +97,6 @@ export function GalleryStrip({
         onMouseLeave={() => setPaused(false)}
         onTouchStart={onTouchPause}
         onScroll={() => {
-          /* keep index roughly in sync when user swipes */
           const el = scrollerRef.current;
           if (!el || !el.children.length) return;
           let best = 0;
@@ -139,7 +134,7 @@ export function GalleryStrip({
       </div>
 
       {photos.length > 1 && (
-        <div className="mt-2 flex items-center justify-center gap-1.5" role="tablist" aria-label="Gallery slides">
+        <div className="mt-2 flex items-center justify-center gap-1" role="tablist" aria-label="Gallery slides">
           {photos.map((p, i) => (
             <button
               key={p.id}
@@ -148,8 +143,10 @@ export function GalleryStrip({
               aria-selected={i === index}
               aria-label={`Show photo ${i + 1}`}
               onClick={() => goTo(i)}
-              className={`h-1.5 rounded-full transition-all ${
-                i === index ? "w-5 bg-brand-600" : "w-1.5 bg-slate-300 hover:bg-slate-400"
+              className={`rounded-full transition-all ${
+                i === index
+                  ? "h-1.5 w-2.5 bg-brand-600"
+                  : "h-1.5 w-1.5 bg-slate-300 hover:bg-slate-400"
               }`}
             />
           ))}
