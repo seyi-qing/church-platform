@@ -16,6 +16,7 @@ from app.api.v1 import (
     care,
     ops,
     gallery,
+    inquiries,
 )
 
 api_router = APIRouter()
@@ -35,3 +36,4 @@ api_router.include_router(campuses.router)
 api_router.include_router(care.router)
 api_router.include_router(ops.router)
 api_router.include_router(gallery.router)
+api_router.include_router(inquiries.router)
