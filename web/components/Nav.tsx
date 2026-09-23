@@ -146,9 +146,8 @@ export function Nav() {
   return (
     <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-2.5">
-        <Link href="/" className="flex min-w-0 items-center gap-2" onClick={() => setMenuOpen(false)}>
-          <ChurchLogo className="h-9 w-9 shrink-0" />
-          <span className="truncate text-base font-bold text-brand-800">Grace Church</span>
+        <Link href="/" className="flex min-w-0 items-center" onClick={() => setMenuOpen(false)}>
+          <ChurchLogo size={36} />
         </Link>
 
         <nav className="hidden items-center gap-1 md:flex" aria-label="Main">
@@ -209,7 +208,6 @@ export function Nav() {
             </Link>
           )}
 
-          {/* Mobile: initials when logged in; hamburger only for guests */}
           {isLoggedIn ? (
             <button
               type="button"
@@ -238,11 +236,9 @@ export function Nav() {
         </div>
       </div>
 
-      {/* Mobile panel */}
       {menuOpen && (
         <div className="border-t border-slate-100 bg-white shadow-inner md:hidden">
           {isLoggedIn ? (
-            /* Account-only sheet — not a full site hamburger */
             <div className="mx-auto max-w-6xl py-1" role="menu" aria-label="Account">
               {accountSection}
             </div>
