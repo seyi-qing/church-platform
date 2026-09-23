@@ -17,8 +17,8 @@ export default function PublicVisitorTemplate({
     return <>{children}</>;
   }
 
-  // Full /contact page already has the form — skip duplicate band there
-  const showContactBand = pathname !== "/contact";
+  // Contact form only on home — full form also lives at /contact
+  const showContactBand = pathname === "/";
 
   return (
     <div className="flex min-h-screen flex-col">
