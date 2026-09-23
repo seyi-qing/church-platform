@@ -67,48 +67,71 @@ export function Nav() {
     router.push("/");
   }
 
-  const accountMenuItems = (
+  const accountSection = (
     <>
-      <div className="border-b border-slate-100 px-3 py-2">
-        <p className="truncate text-sm font-semibold text-slate-900">{user?.full_name}</p>
-        <p className="truncate text-xs text-slate-500">{user?.email}</p>
-      </div>
-      <Link
-        href="/profile"
-        role="menuitem"
-        className="block px-3 py-2.5 text-sm text-slate-800 hover:bg-slate-50"
-        onClick={() => setMenuOpen(false)}
-      >
-        My profile
-      </Link>
-      {staff && (
+      {isLoggedIn && (
+        <div className="border-b border-slate-100 px-3 py-3">
+          <div className="flex items-center gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-100 text-sm font-bold text-blue-800">
+              {initials(user?.full_name)}
+            </span>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-slate-900">{user?.full_name}</p>
+              <p className="truncate text-xs text-slate-500">{user?.email}</p>
+            </div>
+          </div>
+        </div>
+      )}
+      {isLoggedIn && (
+        <>
+          <Link
+            href="/profile"
+            role="menuitem"
+            className="block px-3 py-2.5 text-sm text-slate-800 hover:bg-slate-50"
+            onClick={() => setMenuOpen(false)}
+          >
+            My profile
+          </Link>
+          {staff && (
+            <Link
+              href="/admin"
+              role="menuitem"
+              className="block px-3 py-2.5 text-sm text-slate-800 hover:bg-slate-50"
+              onClick={() => setMenuOpen(false)}
+            >
+              Staff dashboard
+            </Link>
+          )}
+          {!staff && (
+            <Link
+              href="/give"
+              role="menuitem"
+              className="block px-3 py-2.5 text-sm text-slate-800 hover:bg-slate-50"
+              onClick={() => setMenuOpen(false)}
+            >
+              Give
+            </Link>
+          )}
+          <button
+            type="button"
+            role="menuitem"
+            onClick={signOut}
+            className="w-full px-3 py-2.5 text-left text-sm text-red-600 hover:bg-red-50"
+          >
+            Sign out
+          </button>
+        </>
+      )}
+      {!isLoggedIn && (
         <Link
-          href="/admin"
+          href="/login"
           role="menuitem"
-          className="block px-3 py-2.5 text-sm text-slate-800 hover:bg-slate-50"
+          className="block px-3 py-2.5 text-sm font-semibold text-brand-700 hover:bg-slate-50"
           onClick={() => setMenuOpen(false)}
         >
-          Staff dashboard
+          Sign in
         </Link>
       )}
-      {!staff && (
-        <Link
-          href="/give"
-          role="menuitem"
-          className="block px-3 py-2.5 text-sm text-slate-800 hover:bg-slate-50"
-          onClick={() => setMenuOpen(false)}
-        >
-          Give
-        </Link>
-      )}
-      <button
-        type="button"
-        role="menuitem"
-        onClick={signOut}
-        className="w-full px-3 py-2.5 text-left text-sm text-red-600 hover:bg-red-50"
-      >
-        Sign out
-      </button>
     </>
   );
 
@@ -121,9 +144,8 @@ export function Nav() {
         Skip to content
       </a>
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
-        <Link href="/" className="flex min-w-0 items-center gap-2">
-          <ChurchLogo />
-          <span className="truncate text-base font-bold text-slate-900 sm:text-lg">Grace Church</span>
+        <Link href="/" className="flex min-w-0 items-center" onClick={() => setMenuOpen(false)}>
+          <ChurchLogo size={32} />
         </Link>
 
         <nav className="hidden items-center gap-1 md:flex" aria-label="Main">
@@ -147,15 +169,9 @@ export function Nav() {
         </nav>
 
         <div className="flex items-center gap-2">
-          {!isLoggedIn ? (
-            <Link
-              href="/login"
-              className="hidden rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-700 sm:inline-block"
-            >
-              Sign in
-            </Link>
-          ) : (
-            <div className="relative hidden sm:block">
+          {/* Desktop: initials + name when logged in */}
+          {isLoggedIn ? (
+            <div className="relative hidden md:block">
               <button
                 type="button"
                 ref={menuBtnRef}
@@ -176,52 +192,70 @@ export function Nav() {
                 <div
                   id={menuId}
                   role="menu"
-                  className="absolute right-0 mt-2 w-52 rounded-xl border border-slate-200 bg-white py-1 shadow-lg"
+                  className="absolute right-0 z-50 mt-2 w-56 rounded-xl border border-slate-200 bg-white py-1 shadow-lg"
                 >
-                  {accountMenuItems}
+                  {accountSection}
                 </div>
               )}
             </div>
+          ) : (
+            <Link
+              href="/login"
+              className="hidden rounded-lg bg-brand-600 px-3 py-2 text-sm font-semibold text-white hover:bg-brand-700 md:inline-block"
+            >
+              Sign in
+            </Link>
           )}
 
-          <button
-            type="button"
-            className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg border border-slate-200 md:hidden"
-            aria-label="Open menu"
-            aria-expanded={menuOpen}
-            onClick={() => setMenuOpen((v) => !v)}
-          >
-            <svg className="h-6 w-6 text-slate-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-          </button>
+          {/* Mobile: initials when logged in, hamburger when not */}
+          {isLoggedIn ? (
+            <button
+              type="button"
+              className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full md:hidden"
+              aria-label="Open account menu"
+              aria-expanded={menuOpen}
+              onClick={() => setMenuOpen((v) => !v)}
+            >
+              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-100 text-sm font-bold text-blue-800 ring-2 ring-white shadow-sm">
+                {initials(user?.full_name)}
+              </span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg border border-slate-200 md:hidden"
+              aria-label="Open menu"
+              aria-expanded={menuOpen}
+              onClick={() => setMenuOpen((v) => !v)}
+            >
+              <svg className="h-6 w-6 text-slate-700" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+          )}
         </div>
       </div>
 
+      {/* Mobile panel */}
       {menuOpen && (
-        <div className="border-t border-slate-100 bg-white px-4 py-3 md:hidden">
-          <nav className="flex flex-col gap-1" aria-label="Mobile">
-            {links.map((l) => (
-              <Link
-                key={l.href}
-                href={l.href}
-                className="rounded-lg px-3 py-2.5 text-sm font-medium text-slate-800 hover:bg-slate-50"
-                onClick={() => setMenuOpen(false)}
-              >
-                {l.label}
-              </Link>
-            ))}
-            {!isLoggedIn ? (
-              <Link
-                href="/login"
-                className="rounded-lg bg-brand-600 px-3 py-2.5 text-center text-sm font-semibold text-white"
-                onClick={() => setMenuOpen(false)}
-              >
-                Sign in
-              </Link>
-            ) : (
-              <div className="mt-2 border-t border-slate-100 pt-2">{accountMenuItems}</div>
-            )}
+        <div className="border-t border-slate-100 bg-white shadow-inner md:hidden">
+          <nav className="mx-auto max-w-6xl px-2 py-2" aria-label="Mobile">
+            {links.map((l) => {
+              const active = pathname === l.href;
+              return (
+                <Link
+                  key={l.href}
+                  href={l.href}
+                  className={`block rounded-lg px-3 py-2.5 text-sm font-medium ${
+                    active ? "bg-blue-50 text-blue-800" : "text-slate-800 hover:bg-slate-50"
+                  }`}
+                  onClick={() => setMenuOpen(false)}
+                >
+                  {l.label}
+                </Link>
+              );
+            })}
+            <div className="mt-1 border-t border-slate-100 pt-1">{accountSection}</div>
           </nav>
         </div>
       )}
