@@ -13,7 +13,6 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     items: [
       { href: "/admin", label: "Dashboard", roles: ["admin", "pastor", "leader", "secretary"] },
       { href: "/admin/analytics", label: "Analytics", roles: ["admin", "pastor"] },
-      { href: "/admin/campuses", label: "Campuses", roles: ["admin", "pastor"] },
     ],
   },
   {
@@ -21,34 +20,42 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     items: [
       { href: "/admin/members", label: "Members", roles: ["admin", "pastor", "leader", "secretary"] },
       { href: "/admin/visitors", label: "Visitors", roles: ["admin", "pastor", "leader", "secretary"] },
-      { href: "/admin/attendance", label: "Attendance", roles: ["admin", "pastor", "leader", "secretary"] },
-      { href: "/admin/care", label: "Care", roles: ["admin", "pastor", "leader", "secretary"] },
       { href: "/admin/inquiries", label: "Inquiries", roles: ["admin", "pastor", "leader", "secretary"] },
+      { href: "/admin/groups", label: "Groups", roles: ["admin", "pastor", "leader"] },
+      { href: "/admin/attendance", label: "Attendance", roles: ["admin", "pastor", "leader", "secretary"] },
     ],
   },
   {
     title: "Ministry",
     items: [
-      { href: "/admin/announcements", label: "Announcements", roles: ["admin", "pastor", "leader", "secretary"] },
-      { href: "/admin/communications", label: "Communications", roles: ["admin", "pastor", "leader"] },
       { href: "/admin/events", label: "Events", roles: ["admin", "pastor", "leader", "secretary"] },
-      { href: "/admin/media", label: "Media", roles: ["admin", "pastor", "leader"] },
-      { href: "/admin/gallery", label: "Gallery", roles: ["admin", "pastor", "leader"] },
+      { href: "/admin/announcements", label: "Announcements", roles: ["admin", "pastor", "leader", "secretary"] },
+      { href: "/admin/care", label: "Pastoral care", roles: ["admin", "pastor", "leader"] },
+      { href: "/admin/meetings", label: "Meetings", roles: ["admin", "pastor", "leader", "secretary"] },
+    ],
+  },
+  {
+    title: "Media",
+    items: [
+      { href: "/admin/media", label: "Media / Playlists", roles: ["admin", "pastor", "leader"] },
       { href: "/admin/livestream", label: "Livestream", roles: ["admin", "pastor", "leader"] },
+      { href: "/admin/gallery", label: "Gallery", roles: ["admin", "pastor", "leader", "secretary"] },
     ],
   },
   {
     title: "Finance",
     items: [
-      { href: "/admin/giving", label: "Giving", roles: ["admin", "pastor"] },
-      { href: "/admin/expenses", label: "Expenses", roles: ["admin", "pastor"] },
+      { href: "/admin/giving", label: "Giving", roles: ["admin", "pastor", "treasurer"] },
+      { href: "/admin/expenses", label: "Expenses", roles: ["admin", "pastor", "treasurer"] },
     ],
   },
   {
     title: "Tools",
     items: [
-      { href: "/admin/ai", label: "AI Tools", roles: ["admin", "pastor", "leader"] },
-      { href: "/admin/pages", label: "Pages", roles: ["admin", "pastor"] },
+      { href: "/admin/ai", label: "AI tools", roles: ["admin", "pastor"] },
+      { href: "/admin/communications", label: "Communications", roles: ["admin", "pastor", "leader", "secretary"] },
+      { href: "/admin/campuses", label: "Campuses", roles: ["admin", "pastor"] },
+      { href: "/admin/builder", label: "Website builder", roles: ["admin", "pastor"] },
     ],
   },
 ];
@@ -59,7 +66,11 @@ function initials(name?: string | null) {
   return ((parts[0]?.[0] || "") + (parts[1]?.[0] || "")).toUpperCase() || "?";
 }
 
-export default function AdminLayout({ children }: { children: React.ReactNode }) {
+export default function AdminLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const pathname = usePathname();
   const router = useRouter();
   const [ready, setReady] = useState(false);
@@ -78,17 +89,21 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       router.replace("/admin/login");
       return;
     }
-    const parsedUser = getStoredUser();
-    if (parsedUser) {
-      setUser(parsedUser);
-      if (
-        !["admin", "pastor", "leader", "secretary"].includes(parsedUser.role) &&
-        !parsedUser.is_superuser
-      ) {
-        router.replace("/profile");
-        return;
-      }
+    const u = getStoredUser();
+    if (!u) {
+      clearAuth();
+      router.replace("/admin/login");
+      return;
     }
+    const role = (u as any).role;
+    const staff =
+      (u as any).is_superuser ||
+      ["admin", "pastor", "leader", "secretary", "treasurer"].includes(role);
+    if (!staff) {
+      router.replace("/profile");
+      return;
+    }
+    setUser(u);
     setReady(true);
   }, [pathname, router]);
 
@@ -156,7 +171,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             );
           })}
         </nav>
-        <div className="border-t border-slate-800 p-2">
+        <div className="border-t border-slate-800 p-2 space-y-0.5">
+          <Link
+            href="/"
+            onClick={onNavigate}
+            className="block w-full rounded-lg px-3 py-2.5 text-left text-sm font-medium text-blue-300 hover:bg-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
+          >
+            View public site
+          </Link>
           <button
             type="button"
             onClick={doLogout}
@@ -194,6 +216,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             </div>
           </div>
 
+          <Link
+            href="/"
+            className="hidden rounded-lg border border-slate-600 px-2.5 py-1.5 text-xs font-semibold text-slate-200 hover:bg-slate-800 sm:inline-block"
+          >
+            View public site
+          </Link>
+
           <div className="relative">
             <button
               type="button"
@@ -219,7 +248,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                   <p className="truncate text-xs text-slate-500">{user.email}</p>
                 </div>
                 <Link
-                  href="/profile"
+                  href="/"
+                  role="menuitem"
+                  className="block px-3 py-2.5 text-sm font-medium text-brand-700 hover:bg-blue-50"
+                  onClick={() => setProfileOpen(false)}
+                >
+                  View public site
+                </Link>
+                <Link
+                  href="/me"
                   role="menuitem"
                   className="block px-3 py-2.5 text-sm hover:bg-slate-50"
                   onClick={() => setProfileOpen(false)}
@@ -267,9 +304,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </div>
         )}
 
-        <main id="admin-main" className="flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
-          {children}
-        </main>
+        <div className="flex-1 p-4 sm:p-6">{children}</div>
       </div>
     </div>
   );
