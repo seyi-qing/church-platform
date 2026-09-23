@@ -39,6 +39,7 @@ export default function AdminInquiriesPage() {
   const [info, setInfo] = useState("");
   const [selected, setSelected] = useState<Inquiry | null>(null);
   const [notes, setNotes] = useState("");
+  const [reply, setReply] = useState("");
   const [loading, setLoading] = useState(false);
 
   async function load() {
@@ -58,7 +59,36 @@ export default function AdminInquiriesPage() {
   function open(item: Inquiry) {
     setSelected(item);
     setNotes(item.staff_notes || "");
+    setReply("");
     setInfo("");
+  }
+
+  async function sendReply() {
+    if (!selected) return;
+    if (reply.trim().length < 2) {
+      setError("Write a short reply first.");
+      return;
+    }
+    setLoading(true);
+    setError("");
+    setInfo("");
+    try {
+      const res = await apiFetch<{ ok: boolean; to: string; inquiry: Inquiry }>(
+        `/inquiries/${selected.id}/reply`,
+        { method: "POST", body: JSON.stringify({ body: reply.trim() }) }
+      );
+      setInfo(`Reply emailed to ${res.to}.`);
+      setReply("");
+      if (res.inquiry) {
+        setSelected(res.inquiry);
+        setNotes(res.inquiry.staff_notes || "");
+      }
+      await load();
+    } catch (e: any) {
+      setError(e.message || "Could not send reply");
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function setStatus(id: number, status: string) {
@@ -106,8 +136,11 @@ export default function AdminInquiriesPage() {
         `/inquiries/${selected.id}/visitor-follow-up`,
         { method: "POST" }
       );
-      setSelected(res.inquiry);
-      setInfo("Visitor follow-up created. Check Visitors / Care.");
+      setInfo("Visitor follow-up created.");
+      if (res.inquiry) {
+        setSelected(res.inquiry);
+        setNotes(res.inquiry.staff_notes || "");
+      }
       await load();
     } catch (e: any) {
       setError(e.message);
@@ -118,24 +151,28 @@ export default function AdminInquiriesPage() {
 
   async function remove(id: number) {
     if (!confirm("Delete this inquiry permanently?")) return;
+    setLoading(true);
     try {
       await apiFetch(`/inquiries/${id}`, { method: "DELETE" });
-      if (selected?.id === id) setSelected(null);
+      setSelected(null);
       setInfo("Deleted.");
       await load();
     } catch (e: any) {
       setError(e.message);
+    } finally {
+      setLoading(false);
     }
   }
 
   const newCount = items.filter((i) => i.status === "new").length;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-bold text-slate-900">Inquiries</h1>
-        <p className="text-sm text-slate-500">
-          Messages from the public Contact form. {newCount > 0 && (
+        <p className="mt-1 text-sm text-slate-500">
+          Messages from the public Contact form.{" "}
+          {newCount > 0 && (
             <span className="font-semibold text-blue-700">{newCount} new</span>
           )}
         </p>
@@ -145,16 +182,14 @@ export default function AdminInquiriesPage() {
         <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-semibold text-red-600">{error}</p>
       )}
       {info && (
-        <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800">
-          {info}
-        </p>
+        <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-900">{info}</p>
       )}
 
       <div className="flex flex-wrap gap-2">
         <button
           type="button"
           onClick={() => setFilter("")}
-          className={`rounded-full px-3 py-1 text-xs font-semibold ${
+          className={`rounded-full px-3 py-1.5 text-sm font-semibold ${
             !filter ? "bg-slate-900 text-white" : "border bg-white text-slate-700"
           }`}
         >
@@ -165,7 +200,7 @@ export default function AdminInquiriesPage() {
             key={s.value}
             type="button"
             onClick={() => setFilter(s.value)}
-            className={`rounded-full px-3 py-1 text-xs font-semibold ${
+            className={`rounded-full px-3 py-1.5 text-sm font-semibold ${
               filter === s.value ? "bg-slate-900 text-white" : "border bg-white text-slate-700"
             }`}
           >
@@ -175,16 +210,19 @@ export default function AdminInquiriesPage() {
       </div>
 
       {selected && (
-        <div className="rounded-xl border border-blue-200 bg-white p-4 shadow-sm sm:p-5">
-          <div className="mb-3 flex items-start justify-between gap-2">
+        <div className="rounded-xl border bg-white p-4 shadow-sm">
+          <div className="flex items-start justify-between gap-2">
             <div>
-              <p className="text-lg font-semibold text-slate-900">{selected.full_name}</p>
-              <p className="text-sm text-slate-500">
-                <a href={`mailto:${selected.email}`} className="text-brand-700 hover:underline">
-                  {selected.email}
-                </a>
-                {selected.phone ? ` · ${selected.phone}` : ""}
-              </p>
+              <p className="text-lg font-bold text-slate-900">{selected.full_name}</p>
+              <a
+                href={`mailto:${selected.email}`}
+                className="text-sm font-medium text-brand-600 hover:underline"
+              >
+                {selected.email}
+              </a>
+              {selected.phone && (
+                <p className="text-sm text-slate-500">{selected.phone}</p>
+              )}
             </div>
             <button
               type="button"
@@ -195,25 +233,51 @@ export default function AdminInquiriesPage() {
               ✕
             </button>
           </div>
-          <div className="mb-3 flex flex-wrap gap-2 text-xs">
-            <span className={`rounded border px-2 py-0.5 font-bold uppercase ${statusClass(selected.status)}`}>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <span
+              className={`rounded border px-1.5 py-0.5 text-[10px] font-bold uppercase ${
+                statusClass(selected.status)
+              }`}
+            >
               {selected.status.replace("_", " ")}
             </span>
-            <span className="rounded bg-slate-100 px-2 py-0.5 font-semibold capitalize text-slate-700">
+            <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold uppercase text-slate-600">
               {selected.topic}
             </span>
             {selected.created_at && (
-              <span className="text-slate-500">
+              <span className="text-xs text-slate-400">
                 {new Date(selected.created_at).toLocaleString()}
               </span>
             )}
           </div>
           {selected.subject && (
-            <p className="mb-2 text-sm font-semibold text-slate-800">{selected.subject}</p>
+            <p className="mb-2 mt-3 text-sm font-semibold text-slate-800">{selected.subject}</p>
           )}
-          <p className="whitespace-pre-wrap rounded-lg bg-slate-50 p-3 text-sm text-slate-800">
+          <p className="mt-2 whitespace-pre-wrap rounded-lg bg-slate-50 p-3 text-sm text-slate-800">
             {selected.message}
           </p>
+
+          <label className="mt-4 block text-xs font-semibold uppercase text-slate-500">
+            Reply to {selected.full_name}
+          </label>
+          <p className="mt-0.5 text-xs text-slate-500">
+            Sends an email to {selected.email}. Requires Resend on the API.
+          </p>
+          <textarea
+            rows={4}
+            value={reply}
+            onChange={(e) => setReply(e.target.value)}
+            placeholder="Type your reply…"
+            className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
+          />
+          <button
+            type="button"
+            disabled={loading || reply.trim().length < 2}
+            onClick={sendReply}
+            className="mt-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
+          >
+            {loading ? "Sending…" : "Send reply by email"}
+          </button>
 
           <label className="mt-4 block text-xs font-semibold uppercase text-slate-500">
             Staff notes

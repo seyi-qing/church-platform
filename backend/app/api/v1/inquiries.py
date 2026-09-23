@@ -36,6 +36,10 @@ class InquiryUpdate(BaseModel):
     assigned_to: int | None = None
 
 
+class InquiryReply(BaseModel):
+    body: str = Field(min_length=2, max_length=5000)
+
+
 def _serialize(row: ContactInquiry) -> dict:
     return {
         "id": row.id,
@@ -79,46 +83,41 @@ async def submit_inquiry(payload: InquiryCreate, db: DbSession, request: Request
         email=email,
         phone=(payload.phone or "").strip() or None,
         topic=topic,
-        subject=(payload.subject or "").strip()[:255],
+        subject=(payload.subject or "").strip(),
         message=payload.message.strip(),
         status="new",
+        ip_address=(request.client.host if request.client else None),
+        user_agent=(request.headers.get("user-agent") or "")[:500] or None,
     )
     db.add(row)
     await db.flush()
     await db.refresh(row)
 
-    # Optional notify staff (admin/pastor emails)
-    notify_result = None
+    # Optional: notify staff if Resend is configured
     if email_configured():
-        staff_q = await db.execute(
-            select(User).where(
-                User.is_active == True,  # noqa: E712
-                User.role.in_(["admin", "pastor"]),
+        try:
+            staff_q = await db.execute(
+                select(User.email).where(
+                    User.is_active.is_(True),
+                    User.role.in_(["admin", "pastor", "leader", "secretary"]),
+                )
             )
-        )
-        staff_emails = [u.email for u in staff_q.scalars().all() if u.email and "@" in u.email]
-        if staff_emails:
-            subject = f"[Grace Church] New inquiry: {row.subject or row.topic}"
-            body = (
-                f"New contact form submission\n\n"
-                f"From: {row.full_name} <{row.email}>\n"
-                f"Phone: {row.phone or '—'}\n"
-                f"Topic: {row.topic}\n"
-                f"Subject: {row.subject or '—'}\n\n"
-                f"{row.message}\n\n"
-                f"Open Admin → Inquiries to reply and manage."
-            )
-            try:
-                notify_result = await send_email_batch(staff_emails[:10], subject, body)
-            except Exception as e:
-                notify_result = {"error": str(e)[:120]}
+            staff_emails = [e for (e,) in staff_q.all() if e]
+            if staff_emails:
+                subject = f"New contact inquiry: {row.full_name}"
+                body = (
+                    f"From: {row.full_name} <{row.email}>\n"
+                    f"Phone: {row.phone or '—'}\n"
+                    f"Topic: {row.topic}\n"
+                    f"Subject: {row.subject or '—'}\n\n"
+                    f"{row.message}\n\n"
+                    f"Open Admin → Inquiries to reply and manage."
+                )
+                await send_email_batch(staff_emails[:10], subject, body)
+        except Exception:
+            pass
 
-    return {
-        "ok": True,
-        "id": row.id,
-        "message": "Thank you — we received your message and will get back to you soon.",
-        "email_notify": notify_result,
-    }
+    return _serialize(row)
 
 
 @router.get("")
@@ -126,12 +125,11 @@ async def list_inquiries(
     db: DbSession,
     _: LeaderUser,
     status_filter: str | None = None,
-    limit: int = 100,
 ):
-    q = select(ContactInquiry).order_by(ContactInquiry.created_at.desc()).limit(min(limit, 300))
+    q = select(ContactInquiry).order_by(ContactInquiry.created_at.desc())
     if status_filter and status_filter in STATUSES:
         q = q.where(ContactInquiry.status == status_filter)
-    result = await db.execute(q)
+    result = await db.execute(q.limit(200))
     return [_serialize(r) for r in result.scalars().all()]
 
 
@@ -165,6 +163,63 @@ async def update_inquiry(
     await db.flush()
     await db.refresh(row)
     return _serialize(row)
+
+
+@router.post("/{inquiry_id}/reply")
+async def reply_to_inquiry(
+    inquiry_id: int, payload: InquiryReply, db: DbSession, current_user: LeaderUser
+):
+    """Email a reply to the contact and log it in staff notes."""
+    result = await db.execute(select(ContactInquiry).where(ContactInquiry.id == inquiry_id))
+    row = result.scalar_one_or_none()
+    if not row:
+        raise HTTPException(status_code=404, detail="Inquiry not found")
+
+    body = payload.body.strip()
+    if len(body) < 2:
+        raise HTTPException(status_code=400, detail="Reply message is too short")
+
+    if not email_configured():
+        raise HTTPException(
+            status_code=503,
+            detail="Email is not configured. Set RESEND_API_KEY (and EMAIL_FROM) on the API host, then try again.",
+        )
+
+    staff_name = current_user.full_name or current_user.email or "Grace Church"
+    subject_bit = (row.subject or row.topic or "your message").strip()
+    subject = f"Re: {subject_bit} — Grace Church"
+
+    created = row.created_at.strftime("%Y-%m-%d") if row.created_at else "recently"
+    email_body = (
+        f"Hello {row.full_name},\n\n"
+        f"{body}\n\n"
+        f"— {staff_name}\n"
+        f"Grace Church\n\n"
+        f"---\n"
+        f"This is a reply to your message from {created}:\n"
+        f"{(row.message or '')[:400]}\n"
+    )
+
+    send_result = await send_email_batch([row.email], subject, email_body)
+    if not send_result.get("sent"):
+        err = "; ".join(send_result.get("errors") or ["Email send failed"])
+        raise HTTPException(status_code=502, detail=f"Could not send email: {err}")
+
+    stamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
+    log_line = f"\n\n--- Reply sent {stamp} by {staff_name} ---\n{body}"
+    row.staff_notes = (row.staff_notes or "") + log_line
+    if row.status == "new":
+        row.status = "in_progress"
+    row.updated_at = datetime.utcnow()
+    await db.flush()
+    await db.refresh(row)
+
+    return {
+        "ok": True,
+        "email_sent": True,
+        "to": row.email,
+        "inquiry": _serialize(row),
+    }
 
 
 @router.post("/{inquiry_id}/visitor-follow-up", status_code=status.HTTP_201_CREATED)
@@ -248,4 +303,4 @@ async def delete_inquiry(inquiry_id: int, db: DbSession, _: LeaderUser):
         raise HTTPException(status_code=404, detail="Inquiry not found")
     await db.delete(row)
     await db.flush()
-    return {"ok": True, "deleted_id": inquiry_id}
+    return {"ok": True}
