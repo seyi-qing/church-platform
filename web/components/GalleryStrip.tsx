@@ -11,8 +11,8 @@ export type GalleryStripPhoto = {
 };
 
 /**
- * Horizontal gallery strip with gentle auto-advance.
- * Pauses on hover / touch; respects prefers-reduced-motion.
+ * Horizontal gallery strip with reliable auto-advance via scrollLeft
+ * (scrollIntoView is unreliable inside overflow containers on mobile).
  */
 export function GalleryStrip({
   photos,
@@ -25,6 +25,7 @@ export function GalleryStrip({
   const [paused, setPaused] = useState(false);
   const [index, setIndex] = useState(0);
   const [reduceMotion, setReduceMotion] = useState(false);
+  const touchPauseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -35,44 +36,58 @@ export function GalleryStrip({
     return () => mq.removeEventListener?.("change", onChange);
   }, []);
 
-  const scrollToIndex = useCallback((i: number) => {
-    const el = scrollerRef.current;
-    if (!el) return;
-    const children = el.children;
-    if (!children.length) return;
-    const n = ((i % children.length) + children.length) % children.length;
-    const child = children[n] as HTMLElement;
-    child?.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", inline: "center", block: "nearest" });
-    setIndex(n);
-  }, [reduceMotion]);
+  const goTo = useCallback(
+    (i: number) => {
+      const el = scrollerRef.current;
+      if (!el || !el.children.length) return;
+      const n = ((i % el.children.length) + el.children.length) % el.children.length;
+      const child = el.children[n] as HTMLElement;
+      if (!child) return;
+      // Scroll the strip container only — not the whole page
+      const left = child.offsetLeft - (el.clientWidth - child.clientWidth) / 2;
+      el.scrollTo({
+        left: Math.max(0, left),
+        behavior: reduceMotion ? "auto" : "smooth",
+      });
+      setIndex(n);
+    },
+    [reduceMotion]
+  );
 
   useEffect(() => {
     if (reduceMotion || paused || photos.length < 2) return;
     const id = window.setInterval(() => {
       setIndex((prev) => {
         const next = (prev + 1) % photos.length;
-        const el = scrollerRef.current;
-        if (el && el.children[next]) {
-          (el.children[next] as HTMLElement).scrollIntoView({
-            behavior: "smooth",
-            inline: "center",
-            block: "nearest",
-          });
-        }
+        // Defer DOM scroll to next tick so state stays in sync
+        requestAnimationFrame(() => {
+          const el = scrollerRef.current;
+          if (!el || !el.children[next]) return;
+          const child = el.children[next] as HTMLElement;
+          const left = child.offsetLeft - (el.clientWidth - child.clientWidth) / 2;
+          el.scrollTo({ left: Math.max(0, left), behavior: "smooth" });
+        });
         return next;
       });
-    }, 4500);
+    }, 4000);
     return () => window.clearInterval(id);
   }, [paused, reduceMotion, photos.length]);
+
+  function onTouchPause() {
+    setPaused(true);
+    if (touchPauseTimer.current) clearTimeout(touchPauseTimer.current);
+    // Resume auto-slide a few seconds after user stops interacting
+    touchPauseTimer.current = setTimeout(() => setPaused(false), 6000);
+  }
 
   if (!photos.length) return null;
 
   return (
-    <section aria-label="Photo gallery">
+    <section aria-label="Photo gallery" className="w-full">
       <div className="mb-3 flex items-end justify-between gap-4">
         <div>
           <h2 className="text-xl font-bold text-slate-900">Life at {brandName}</h2>
-          <p className="text-sm text-slate-500">From our gallery</p>
+          <p className="text-sm text-slate-500">From our gallery · slides automatically</p>
         </div>
         <Link href="/gallery" className="text-sm font-semibold text-brand-600 hover:underline">
           Full gallery
@@ -81,11 +96,28 @@ export function GalleryStrip({
 
       <div
         ref={scrollerRef}
-        className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-2 snap-x snap-mandatory scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="-mx-1 flex gap-3 overflow-x-auto scroll-smooth px-1 pb-2 snap-x snap-mandatory [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         onMouseEnter={() => setPaused(true)}
         onMouseLeave={() => setPaused(false)}
-        onTouchStart={() => setPaused(true)}
-        onTouchEnd={() => setPaused(false)}
+        onTouchStart={onTouchPause}
+        onScroll={() => {
+          /* keep index roughly in sync when user swipes */
+          const el = scrollerRef.current;
+          if (!el || !el.children.length) return;
+          let best = 0;
+          let bestDist = Infinity;
+          const mid = el.scrollLeft + el.clientWidth / 2;
+          for (let i = 0; i < el.children.length; i++) {
+            const c = el.children[i] as HTMLElement;
+            const cMid = c.offsetLeft + c.clientWidth / 2;
+            const d = Math.abs(cMid - mid);
+            if (d < bestDist) {
+              bestDist = d;
+              best = i;
+            }
+          }
+          if (best !== index) setIndex(best);
+        }}
       >
         {photos.map((p) => (
           <Link
@@ -115,7 +147,7 @@ export function GalleryStrip({
               role="tab"
               aria-selected={i === index}
               aria-label={`Show photo ${i + 1}`}
-              onClick={() => scrollToIndex(i)}
+              onClick={() => goTo(i)}
               className={`h-1.5 rounded-full transition-all ${
                 i === index ? "w-5 bg-brand-600" : "w-1.5 bg-slate-300 hover:bg-slate-400"
               }`}
