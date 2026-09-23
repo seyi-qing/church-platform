@@ -85,7 +85,7 @@ export function Nav() {
       {isLoggedIn && (
         <div className="py-1">
           <Link
-            href="/me"
+            href="/profile"
             role="menuitem"
             className="block px-3 py-2.5 text-sm text-slate-800 hover:bg-slate-50"
             onClick={() => setMenuOpen(false)}
@@ -104,7 +104,7 @@ export function Nav() {
           )}
           {!staff && (
             <Link
-              href="/me/giving"
+              href="/profile"
               role="menuitem"
               className="block px-3 py-2.5 text-sm text-slate-800 hover:bg-slate-50"
               onClick={() => setMenuOpen(false)}
