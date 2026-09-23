@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { apiFetch } from "@/lib/api";
+import { getAccessToken, getStoredUser } from "@/lib/auth";
 
 const TOPICS = [
   { value: "general", label: "General question" },
@@ -11,6 +12,12 @@ const TOPICS = [
   { value: "give", label: "Giving / donations" },
   { value: "other", label: "Other" },
 ];
+
+type Me = {
+  full_name?: string | null;
+  email?: string | null;
+  phone?: string | null;
+};
 
 export default function ContactPage() {
   const [fullName, setFullName] = useState("");
@@ -22,10 +29,42 @@ export default function ContactPage() {
   const [error, setError] = useState("");
   const [done, setDone] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [isMember, setIsMember] = useState(false);
+
+  useEffect(() => {
+    // Guests: leave empty. Logged-in: fill from local session, then refresh from API.
+    const stored = getStoredUser<Me>();
+    const token = getAccessToken();
+    if (!token && !stored) {
+      setIsMember(false);
+      return;
+    }
+
+    if (stored) {
+      setIsMember(true);
+      if (stored.full_name) setFullName(stored.full_name);
+      if (stored.email) setEmail(stored.email);
+      if (stored.phone) setPhone(stored.phone);
+    }
+
+    if (!token) return;
+
+    apiFetch<Me>("/auth/me")
+      .then((me) => {
+        setIsMember(true);
+        if (me.full_name) setFullName(me.full_name);
+        if (me.email) setEmail(me.email);
+        if (me.phone) setPhone(me.phone || "");
+      })
+      .catch(() => {
+        /* guest or expired token — keep empty / stored */
+      });
+  }, []);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
+    setDone(false);
     if (fullName.trim().length < 2 || !email.trim() || message.trim().length < 5) {
       setError("Please fill in your name, email, and a short message.");
       return;
@@ -44,12 +83,15 @@ export default function ContactPage() {
         }),
       });
       setDone(true);
-      setFullName("");
-      setEmail("");
-      setPhone("");
       setSubject("");
       setMessage("");
       setTopic("general");
+      // Keep identity fields filled for signed-in users; clear for guests
+      if (!isMember) {
+        setFullName("");
+        setEmail("");
+        setPhone("");
+      }
     } catch (err: any) {
       setError(err.message || "Could not send. Please try again.");
     } finally {
@@ -62,6 +104,11 @@ export default function ContactPage() {
       <h1 className="text-2xl font-bold text-slate-900">Contact us</h1>
       <p className="mt-2 text-sm text-slate-600">
         Send a message to the church office. Staff will see it in the admin inbox and follow up.
+        {isMember && (
+          <span className="block mt-1 text-slate-500">
+            Your account details are filled in — you can edit them before sending.
+          </span>
+        )}
       </p>
 
       {done && (
