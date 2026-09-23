@@ -134,7 +134,7 @@ export function GalleryStrip({
       </div>
 
       {photos.length > 1 && (
-        <div className="mt-2 flex items-center justify-center gap-1" role="tablist" aria-label="Gallery slides">
+        <div className="mt-2 flex items-center justify-center gap-1.5" role="tablist" aria-label="Gallery slides">
           {photos.map((p, i) => (
             <button
               key={p.id}
@@ -143,10 +143,8 @@ export function GalleryStrip({
               aria-selected={i === index}
               aria-label={`Show photo ${i + 1}`}
               onClick={() => goTo(i)}
-              className={`rounded-full transition-all ${
-                i === index
-                  ? "h-1.5 w-2.5 bg-brand-600"
-                  : "h-1.5 w-1.5 bg-slate-300 hover:bg-slate-400"
+              className={`h-1.5 w-1.5 rounded-full transition-colors ${
+                i === index ? "bg-brand-600" : "bg-slate-300 hover:bg-slate-400"
               }`}
             />
           ))}
