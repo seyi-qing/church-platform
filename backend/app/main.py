@@ -1,7 +1,9 @@
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from sqlalchemy import text
 
 from app.api.v1.router import api_router
 from app.core.config import get_settings
@@ -11,6 +13,20 @@ from app.db.base import Base
 import app.models  # noqa: F401
 
 settings = get_settings()
+
+
+async def _ensure_columns() -> None:
+    """create_all does not ADD columns to existing tables — patch common gaps."""
+    statements = [
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR(40)",
+        "ALTER TABLE member_profiles ADD COLUMN IF NOT EXISTS phone VARCHAR(40)",
+    ]
+    async with engine.begin() as conn:
+        for sql in statements:
+            try:
+                await conn.execute(text(sql))
+            except Exception as e:
+                print(f"[migrate] skip {sql!r}: {e}")
 
 
 async def _auto_seed_if_empty() -> None:
@@ -104,10 +120,9 @@ async def _auto_seed_if_empty() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Create tables + seed empty DB in any environment (suitable for free-tier testing).
-    # For a hardened production later, switch to Alembic-only and disable auto-seed.
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+    await _ensure_columns()
     await _auto_seed_if_empty()
     yield
     await engine.dispose()
@@ -121,13 +136,39 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Explicit origins + Vercel preview/production regex so CORS never blocks the web app
+_cors_origins = list(settings.BACKEND_CORS_ORIGINS or [])
+for extra in (
+    "https://church-platform-mu.vercel.app",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+):
+    if extra not in _cors_origins:
+        _cors_origins.append(extra)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.BACKEND_CORS_ORIGINS,
+    allow_origins=_cors_origins,
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    """Always return JSON + CORS-friendly body so the browser does not show 'Failed to fetch'."""
+    # CORSMiddleware still applies; this ensures a proper JSON detail
+    print(f"[error] {request.method} {request.url.path}: {exc!r}")
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": "Server error. If this persists after a redeploy, check Render logs."
+        },
+    )
+
 
 app.include_router(api_router, prefix=settings.API_V1_STR)
 

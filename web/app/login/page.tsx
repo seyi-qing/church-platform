@@ -3,10 +3,21 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, API_URL } from "@/lib/api";
 import { setAuth, isStaffRole } from "@/lib/auth";
 
 type Mode = "login" | "register";
+
+function friendlyAuthError(msg: string) {
+  const m = (msg || "").toLowerCase();
+  if (m.includes("failed to fetch") || m.includes("network") || m.includes("abort")) {
+    return "Cannot reach the server. The API may be waking up (free hosting) — wait 30–60 seconds and try again.";
+  }
+  if (m.includes("incorrect") || m.includes("password")) {
+    return "Incorrect email or password.";
+  }
+  return msg || "Something went wrong";
+}
 
 export default function MemberLoginPage() {
   const router = useRouter();
@@ -54,7 +65,7 @@ export default function MemberLoginPage() {
         router.replace("/profile");
       }
     } catch (err: any) {
-      setError(err.message || "Something went wrong");
+      setError(friendlyAuthError(err.message));
     } finally {
       setBusy(false);
     }
@@ -94,6 +105,7 @@ export default function MemberLoginPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
+              autoComplete="email"
             />
           </label>
           <label className="block text-sm">
@@ -105,11 +117,15 @@ export default function MemberLoginPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
+              autoComplete={mode === "login" ? "current-password" : "new-password"}
             />
           </label>
 
           {error && (
-            <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
+            <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+              <p>{error}</p>
+              <p className="mt-1 text-[11px] text-red-500/80">API: {API_URL}</p>
+            </div>
           )}
 
           <button
@@ -125,7 +141,11 @@ export default function MemberLoginPage() {
           {mode === "login" ? (
             <>
               New here?{" "}
-              <button type="button" className="font-semibold text-blue-600" onClick={() => setMode("register")}>
+              <button
+                type="button"
+                className="font-semibold text-blue-600"
+                onClick={() => setMode("register")}
+              >
                 Create an account
               </button>
             </>
