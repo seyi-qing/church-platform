@@ -83,9 +83,9 @@ export function Nav() {
         </div>
       )}
       {isLoggedIn && (
-        <>
+        <div className="py-1">
           <Link
-            href="/profile"
+            href="/me"
             role="menuitem"
             className="block px-3 py-2.5 text-sm text-slate-800 hover:bg-slate-50"
             onClick={() => setMenuOpen(false)}
@@ -96,7 +96,7 @@ export function Nav() {
             <Link
               href="/admin"
               role="menuitem"
-              className="block px-3 py-2.5 text-sm text-slate-800 hover:bg-slate-50"
+              className="block px-3 py-2.5 text-sm font-medium text-brand-700 hover:bg-blue-50"
               onClick={() => setMenuOpen(false)}
             >
               Staff dashboard
@@ -104,48 +104,51 @@ export function Nav() {
           )}
           {!staff && (
             <Link
-              href="/give"
+              href="/me/giving"
               role="menuitem"
               className="block px-3 py-2.5 text-sm text-slate-800 hover:bg-slate-50"
               onClick={() => setMenuOpen(false)}
             >
-              Give
+              My giving
             </Link>
           )}
           <button
             type="button"
             role="menuitem"
             onClick={signOut}
-            className="w-full px-3 py-2.5 text-left text-sm text-red-600 hover:bg-red-50"
+            className="block w-full px-3 py-2.5 text-left text-sm font-medium text-red-600 hover:bg-red-50"
           >
             Sign out
           </button>
-        </>
+        </div>
       )}
       {!isLoggedIn && (
-        <Link
-          href="/login"
-          role="menuitem"
-          className="block px-3 py-2.5 text-sm font-semibold text-brand-700 hover:bg-slate-50"
-          onClick={() => setMenuOpen(false)}
-        >
-          Sign in
-        </Link>
+        <div className="py-1">
+          <Link
+            href="/login"
+            className="block px-3 py-2.5 text-sm font-semibold text-brand-700 hover:bg-blue-50"
+            onClick={() => setMenuOpen(false)}
+          >
+            Member sign in
+          </Link>
+          <Link
+            href="/admin/login"
+            className="block px-3 py-2.5 text-sm text-slate-600 hover:bg-slate-50"
+            onClick={() => setMenuOpen(false)}
+          >
+            Staff login
+          </Link>
+        </div>
       )}
     </>
   );
 
   return (
-    <header className="sticky top-0 z-50 border-b border-slate-200/80 bg-white/95 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/80">
-      <a
-        href="#main-content"
-        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-[60] focus:rounded-lg focus:bg-blue-600 focus:px-3 focus:py-2 focus:text-white"
-      >
-        Skip to content
-      </a>
-      <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
-        <Link href="/" className="flex min-w-0 items-center" onClick={() => setMenuOpen(false)}>
-          <ChurchLogo size={32} />
+    <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur">
+      <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-2.5">
+        <Link href="/" className="flex min-w-0 items-center gap-2" onClick={() => setMenuOpen(false)}>
+          <ChurchLogo className="h-9 w-9 shrink-0" />
+          <span className="truncate text-base font-bold text-brand-800">Grace Church</span>
         </Link>
 
         <nav className="hidden items-center gap-1 md:flex" aria-label="Main">
@@ -169,7 +172,6 @@ export function Nav() {
         </nav>
 
         <div className="flex items-center gap-2">
-          {/* Desktop: initials + name when logged in */}
           {isLoggedIn ? (
             <div className="relative hidden md:block">
               <button
@@ -207,7 +209,7 @@ export function Nav() {
             </Link>
           )}
 
-          {/* Mobile: initials when logged in, hamburger when not */}
+          {/* Mobile: initials when logged in; hamburger only for guests */}
           {isLoggedIn ? (
             <button
               type="button"
@@ -239,24 +241,31 @@ export function Nav() {
       {/* Mobile panel */}
       {menuOpen && (
         <div className="border-t border-slate-100 bg-white shadow-inner md:hidden">
-          <nav className="mx-auto max-w-6xl px-2 py-2" aria-label="Mobile">
-            {links.map((l) => {
-              const active = pathname === l.href;
-              return (
-                <Link
-                  key={l.href}
-                  href={l.href}
-                  className={`block rounded-lg px-3 py-2.5 text-sm font-medium ${
-                    active ? "bg-blue-50 text-blue-800" : "text-slate-800 hover:bg-slate-50"
-                  }`}
-                  onClick={() => setMenuOpen(false)}
-                >
-                  {l.label}
-                </Link>
-              );
-            })}
-            <div className="mt-1 border-t border-slate-100 pt-1">{accountSection}</div>
-          </nav>
+          {isLoggedIn ? (
+            /* Account-only sheet — not a full site hamburger */
+            <div className="mx-auto max-w-6xl py-1" role="menu" aria-label="Account">
+              {accountSection}
+            </div>
+          ) : (
+            <nav className="mx-auto max-w-6xl px-2 py-2" aria-label="Mobile">
+              {links.map((l) => {
+                const active = pathname === l.href;
+                return (
+                  <Link
+                    key={l.href}
+                    href={l.href}
+                    className={`block rounded-lg px-3 py-2.5 text-sm font-medium ${
+                      active ? "bg-blue-50 text-blue-800" : "text-slate-800 hover:bg-slate-50"
+                    }`}
+                    onClick={() => setMenuOpen(false)}
+                  >
+                    {l.label}
+                  </Link>
+                );
+              })}
+              <div className="mt-1 border-t border-slate-100 pt-1">{accountSection}</div>
+            </nav>
+          )}
         </div>
       )}
     </header>
