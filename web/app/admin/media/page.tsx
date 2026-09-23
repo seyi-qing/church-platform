@@ -141,7 +141,7 @@ export default function AdminMediaPage() {
     setError("");
     setInfo("");
     try {
-      const res = await apiFetch<{ count: number; items: { title: string; action: string }[] }>(
+      const res = await apiFetch<{ count: number }>(
         `/media/cleanup-weak?delete=${deleteMode}`,
         { method: "POST" }
       );
@@ -290,7 +290,11 @@ export default function AdminMediaPage() {
                   <p className="text-xs text-slate-500">
                     {item.media_type}
                     {item.speaker ? ` · ${item.speaker}` : ""}
-                    {item.is_published ? " · published" : " · draft"}
+                    {item.is_published ? (
+                      <span className="font-semibold text-emerald-600"> · published</span>
+                    ) : (
+                      <span className="text-slate-400"> · draft</span>
+                    )}
                   </p>
                   <p className="mt-1">
                     <span
