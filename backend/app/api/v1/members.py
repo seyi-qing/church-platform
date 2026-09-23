@@ -23,6 +23,8 @@ import secrets
 
 router = APIRouter(prefix="/members", tags=["members / ChMS"])
 
+STAFF_CREATE_ROLES = ("member", "leader", "secretary", "pastor", "admin", "treasurer")
+
 
 class VisitorCreate(BaseModel):
     full_name: str = Field(min_length=1, max_length=200)
@@ -54,9 +56,13 @@ async def member_directory(
     term = (q or "").strip()
     if term:
         like = f"%{term}%"
-        query = query.where(
-            or_(User.full_name.ilike(like), User.email.ilike(like), User.phone.ilike(like))
-        )
+        # Name + email only — phone is optional on older DBs until column exists
+        clauses = [User.full_name.ilike(like), User.email.ilike(like)]
+        try:
+            clauses.append(User.phone.ilike(like))
+        except Exception:
+            pass
+        query = query.where(or_(*clauses))
     result = await db.execute(query)
     rows = []
     for user, profile in result.all():
@@ -66,7 +72,7 @@ async def member_directory(
                 "profile_id": profile.id if profile else None,
                 "full_name": user.full_name,
                 "email": user.email,
-                "phone": user.phone,
+                "phone": getattr(user, "phone", None),
                 "membership_status": profile.membership_status if profile else "active",
             }
         )
@@ -78,11 +84,7 @@ async def create_user_staff(payload: UserCreateStaff, db: DbSession, _: AdminUse
     existing = await db.execute(select(User).where(User.email == payload.email))
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="Email already registered")
-    role = (
-        payload.role
-        if payload.role in ("member", "leader", "secretary", "pastor", "admin")
-        else "member"
-    )
+    role = payload.role if payload.role in STAFF_CREATE_ROLES else "member"
     user = User(
         email=payload.email,
         hashed_password=get_password_hash(payload.password),
@@ -100,7 +102,6 @@ async def create_user_staff(payload: UserCreateStaff, db: DbSession, _: AdminUse
 
 @router.post("/visitors", status_code=status.HTTP_201_CREATED)
 async def create_visitor(payload: VisitorCreate, db: DbSession, current_user: LeaderUser):
-    """Capture a visitor and optionally open a pastoral follow-up."""
     email = (str(payload.email).lower().strip() if payload.email else None)
     if not email:
         slug = secrets.token_hex(4)
@@ -120,7 +121,7 @@ async def create_visitor(payload: VisitorCreate, db: DbSession, current_user: Le
         db.add(user)
         await db.flush()
     else:
-        if payload.phone and not user.phone:
+        if payload.phone and not getattr(user, "phone", None):
             user.phone = payload.phone
         if payload.full_name and user.full_name != payload.full_name:
             user.full_name = payload.full_name.strip()
@@ -261,13 +262,34 @@ async def update_my_profile(
         db.add(profile)
         await db.flush()
     data = payload.model_dump(exclude_unset=True)
-    allowed = {"address", "notes", "birthdate", "baptism_date", "photo_url"}
+    allowed = {"address", "notes", "birthdate", "baptism_date", "photo_url", "phone"}
     for k, v in data.items():
         if k in allowed:
             setattr(profile, k, v)
     await db.flush()
     await db.refresh(profile)
     return profile
+
+
+@router.patch("/me/account", response_model=UserOut)
+async def update_my_account(
+    payload: dict,
+    db: DbSession,
+    current_user: CurrentUser,
+):
+    """Member/staff can update display name only — not email or password."""
+    name = payload.get("full_name")
+    if name is not None:
+        name = str(name).strip()
+        if len(name) < 2:
+            raise HTTPException(status_code=400, detail="Name is too short")
+        current_user.full_name = name
+    phone = payload.get("phone")
+    if phone is not None:
+        current_user.phone = str(phone).strip() or None
+    await db.flush()
+    await db.refresh(current_user)
+    return current_user
 
 
 @router.post("/groups", response_model=GroupOut, status_code=status.HTTP_201_CREATED)

@@ -19,6 +19,18 @@ oauth2_scheme_optional = OAuth2PasswordBearer(
 DbSession = Annotated[AsyncSession, Depends(get_db)]
 TokenDep = Annotated[str, Depends(oauth2_scheme)]
 
+# Role hierarchy notes (frontend mirrors these lists):
+# admin, pastor  → full staff + finance + AI
+# treasurer      → giving + expenses (finance)
+# leader         → people, ministry content, attendance
+# secretary      → people, events, announcements, attendance
+# member         → public + own profile/giving
+
+STAFF_ROLES = ("admin", "pastor", "leader", "secretary", "treasurer")
+LEADER_ROLES = ("admin", "pastor", "leader", "secretary")  # pastoral/ops, not only finance
+ADMIN_ROLES = ("admin", "pastor")
+FINANCE_ROLES = ("admin", "pastor", "treasurer")
+
 
 async def get_current_user(db: DbSession, token: TokenDep) -> User:
     user_id = verify_token(token, expected_type="access")
@@ -73,6 +85,7 @@ def require_roles(*roles: str) -> Callable:
     return role_checker
 
 
-AdminUser = Annotated[User, Depends(require_roles("admin", "pastor"))]
-LeaderUser = Annotated[User, Depends(require_roles("leader", "admin", "pastor"))]
-StaffUser = Annotated[User, Depends(require_roles("leader", "admin", "pastor", "secretary"))]
+AdminUser = Annotated[User, Depends(require_roles(*ADMIN_ROLES))]
+LeaderUser = Annotated[User, Depends(require_roles(*LEADER_ROLES))]
+StaffUser = Annotated[User, Depends(require_roles(*STAFF_ROLES))]
+FinanceUser = Annotated[User, Depends(require_roles(*FINANCE_ROLES))]
