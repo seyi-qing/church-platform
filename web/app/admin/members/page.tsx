@@ -10,11 +10,13 @@ type User = {
   role: string;
   is_active: boolean;
   phone?: string | null;
+  is_superuser?: boolean;
 };
 
 type UserDetail = {
   user: User & {
     is_superuser?: boolean;
+    is_system_protected?: boolean;
     created_at?: string | null;
   };
   profile: {
@@ -35,6 +37,8 @@ type UserDetail = {
   }[];
 };
 
+const SYSTEM_ADMIN_EMAIL = "admin@churchplatform.com";
+
 const ROLES = [
   { value: "member", label: "Member" },
   { value: "leader", label: "Leader" },
@@ -43,6 +47,11 @@ const ROLES = [
   { value: "pastor", label: "Pastor" },
   { value: "admin", label: "Admin" },
 ] as const;
+
+function isProtectedUser(u: { email?: string; is_superuser?: boolean; is_system_protected?: boolean }) {
+  if (u.is_system_protected || u.is_superuser) return true;
+  return (u.email || "").toLowerCase().trim() === SYSTEM_ADMIN_EMAIL;
+}
 
 function roleBadgeClass(role: string) {
   if (role === "admin" || role === "pastor") return "bg-purple-100 text-purple-800";
@@ -72,6 +81,7 @@ export default function AdminMembersPage() {
     is_active: true,
     password: "",
   });
+  const [editProtected, setEditProtected] = useState(false);
 
   async function load() {
     try {
@@ -109,6 +119,7 @@ export default function AdminMembersPage() {
 
   function openEdit(u: User) {
     setEditId(u.id);
+    setEditProtected(isProtectedUser(u));
     setEditForm({
       full_name: u.full_name || "",
       phone: u.phone || "",
@@ -124,6 +135,7 @@ export default function AdminMembersPage() {
 
   function cancelEdit() {
     setEditId(null);
+    setEditProtected(false);
     setEditForm({ full_name: "", phone: "", role: "member", is_active: true, password: "" });
   }
 
@@ -132,6 +144,10 @@ export default function AdminMembersPage() {
     setInfo("");
     if (!fullName.trim() || !email.trim() || password.length < 8) {
       setError("Name, email, and password (min 8 characters) are required.");
+      return;
+    }
+    if (email.trim().toLowerCase() === SYSTEM_ADMIN_EMAIL) {
+      setError("That email is reserved for the system administrator (seed only).");
       return;
     }
     setLoading(true);
@@ -170,9 +186,11 @@ export default function AdminMembersPage() {
       const body: Record<string, unknown> = {
         full_name: editForm.full_name.trim(),
         phone: editForm.phone.trim() || null,
-        role: editForm.role,
-        is_active: editForm.is_active,
       };
+      if (!editProtected) {
+        body.role = editForm.role;
+        body.is_active = editForm.is_active;
+      }
       if (editForm.password.trim().length >= 8) {
         body.password = editForm.password.trim();
       }
@@ -191,6 +209,10 @@ export default function AdminMembersPage() {
   }
 
   async function deactivate(u: User) {
+    if (isProtectedUser(u)) {
+      setError("Cannot deactivate the system administrator.");
+      return;
+    }
     if (!confirm(`Deactivate ${u.full_name || u.email}? They will not be able to sign in.`)) return;
     setError("");
     try {
@@ -207,6 +229,10 @@ export default function AdminMembersPage() {
   }
 
   async function remove(u: User) {
+    if (isProtectedUser(u)) {
+      setError("Cannot delete the system administrator — change only via database seed.");
+      return;
+    }
     if (
       !confirm(
         `Permanently delete ${u.full_name || u.email}? This cannot be undone. Prefer Deactivate if unsure.`
@@ -230,8 +256,8 @@ export default function AdminMembersPage() {
       <div>
         <h1 className="text-2xl font-bold text-slate-900">Members & Staff Registry</h1>
         <p className="text-sm text-slate-500">
-          Tap a name to view their profile. Edit, deactivate, or delete from the list or profile
-          panel.
+          Tap a name to view profile. Promote people with Edit → role. System Administrator is
+          protected (seed only).
         </p>
       </div>
 
@@ -261,8 +287,7 @@ export default function AdminMembersPage() {
         <input
           placeholder="Phone number"
           value={phone}
-          onChange={(e) => setPhone(e.target.value)}
-          className="rounded border px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
+          onChange={(e) => setPhone(e.target.value)}\n          className="rounded border px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
         />
         <input
           placeholder="Password (min 8)"
@@ -297,7 +322,20 @@ export default function AdminMembersPage() {
           onSubmit={saveEdit}
           className="space-y-3 rounded-xl border border-blue-200 bg-blue-50/40 p-4 shadow-sm"
         >
-          <p className="text-sm font-semibold text-slate-900">Edit user #{editId}</p>
+          <p className="text-sm font-semibold text-slate-900">
+            Edit user #{editId}
+            {editProtected && (
+              <span className="ml-2 rounded bg-slate-800 px-2 py-0.5 text-[10px] font-bold uppercase text-white">
+                Protected
+              </span>
+            )}
+          </p>
+          {editProtected && (
+            <p className="text-xs text-slate-600">
+              System administrator: role and active status cannot be changed here. Use database seed
+              for root changes. Name, phone, and password can still be updated.
+            </p>
+          )}
           <div className="grid gap-3 sm:grid-cols-2">
             <input
               required
@@ -314,8 +352,9 @@ export default function AdminMembersPage() {
             />
             <select
               value={editForm.role}
+              disabled={editProtected}
               onChange={(e) => setEditForm({ ...editForm, role: e.target.value })}
-              className="rounded border bg-white px-3 py-2 text-sm"
+              className="rounded border bg-white px-3 py-2 text-sm disabled:opacity-60"
             >
               {ROLES.map((r) => (
                 <option key={r.value} value={r.value}>
@@ -327,6 +366,7 @@ export default function AdminMembersPage() {
               <input
                 type="checkbox"
                 checked={editForm.is_active}
+                disabled={editProtected}
                 onChange={(e) => setEditForm({ ...editForm, is_active: e.target.checked })}
               />
               Active (can sign in)
@@ -359,7 +399,6 @@ export default function AdminMembersPage() {
         </form>
       )}
 
-      {/* Profile panel */}
       {(viewId || detailLoading) && (
         <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
           <div className="mb-3 flex items-start justify-between gap-2">
@@ -386,9 +425,18 @@ export default function AdminMembersPage() {
                   </p>
                   <p className="text-sm text-slate-500">{detail.user.email}</p>
                 </div>
-                <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${roleBadgeClass(detail.user.role)}`}>
+                <span
+                  className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${
+                    roleBadgeClass(detail.user.role)
+                  }`}
+                >
                   {detail.user.role}
                 </span>
+                {isProtectedUser(detail.user) && (
+                  <span className="rounded bg-slate-800 px-2 py-0.5 text-[10px] font-bold uppercase text-white">
+                    Protected
+                  </span>
+                )}
                 <span
                   className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${
                     detail.user.is_active
@@ -461,7 +509,7 @@ export default function AdminMembersPage() {
                 >
                   Edit account
                 </button>
-                {detail.user.is_active && (
+                {!isProtectedUser(detail.user) && detail.user.is_active && (
                   <button
                     type="button"
                     onClick={() => deactivate(detail.user)}
@@ -470,13 +518,20 @@ export default function AdminMembersPage() {
                     Deactivate
                   </button>
                 )}
-                <button
-                  type="button"
-                  onClick={() => remove(detail.user)}
-                  className="rounded-lg border border-red-200 px-3 py-1.5 text-sm font-semibold text-red-600"
-                >
-                  Delete
-                </button>
+                {!isProtectedUser(detail.user) && (
+                  <button
+                    type="button"
+                    onClick={() => remove(detail.user)}
+                    className="rounded-lg border border-red-200 px-3 py-1.5 text-sm font-semibold text-red-600"
+                  >
+                    Delete
+                  </button>
+                )}
+                {isProtectedUser(detail.user) && (
+                  <p className="text-xs text-slate-500">
+                    Protected root account — delete/deactivate/demote only via database seed.
+                  </p>
+                )}
               </div>
             </div>
           )}
@@ -495,69 +550,79 @@ export default function AdminMembersPage() {
               No registered system members found.
             </li>
           ) : (
-            users.map((u) => (
-              <li
-                key={u.id}
-                className={`flex flex-wrap items-center justify-between gap-3 px-4 py-3 transition hover:bg-slate-50 ${
-                  viewId === u.id ? "bg-blue-50/50" : ""
-                }`}
-              >
-                <button
-                  type="button"
-                  onClick={() => openProfile(u)}
-                  className="min-w-0 flex-1 text-left"
+            users.map((u) => {
+              const protected = isProtectedUser(u);
+              return (
+                <li
+                  key={u.id}
+                  className={`flex flex-wrap items-center justify-between gap-3 px-4 py-3 transition hover:bg-slate-50 ${
+                    viewId === u.id ? "bg-blue-50/50" : ""
+                  }`}
                 >
-                  <p className="text-sm font-semibold text-brand-700 underline-offset-2 hover:underline">
-                    {u.full_name || "Unnamed User"}
-                  </p>
-                  <p className="mt-0.5 text-xs text-slate-500">
-                    {u.email}
-                    {u.phone ? ` · ${u.phone}` : ""}
-                  </p>
-                </button>
-                <div className="flex flex-wrap items-center gap-2">
-                  <span
-                    className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
-                      roleBadgeClass(u.role)
-                    }`}
-                  >
-                    {u.role}
-                  </span>
-                  <span
-                    className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${
-                      u.is_active
-                        ? "border border-emerald-200 bg-emerald-50 text-emerald-700"
-                        : "border border-red-200 bg-red-50 text-red-700"
-                    }`}
-                  >
-                    {u.is_active ? "Active" : "Inactive"}
-                  </span>
                   <button
                     type="button"
-                    onClick={() => openEdit(u)}
-                    className="rounded border px-2 py-1 text-xs font-semibold text-slate-700"
+                    onClick={() => openProfile(u)}
+                    className="min-w-0 flex-1 text-left"
                   >
-                    Edit
+                    <p className="text-sm font-semibold text-brand-700 underline-offset-2 hover:underline">
+                      {u.full_name || "Unnamed User"}
+                    </p>
+                    <p className="mt-0.5 text-xs text-slate-500">
+                      {u.email}
+                      {u.phone ? ` · ${u.phone}` : ""}
+                    </p>
                   </button>
-                  {u.is_active && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
+                        roleBadgeClass(u.role)
+                      }`}
+                    >
+                      {u.role}
+                    </span>
+                    {protected && (
+                      <span className="rounded bg-slate-800 px-1.5 py-0.5 text-[10px] font-bold uppercase text-white">
+                        Protected
+                      </span>
+                    )}
+                    <span
+                      className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${
+                        u.is_active
+                          ? "border border-emerald-200 bg-emerald-50 text-emerald-700"
+                          : "border border-red-200 bg-red-50 text-red-700"
+                      }`}
+                    >
+                      {u.is_active ? "Active" : "Inactive"}
+                    </span>
                     <button
                       type="button"
-                      onClick={() => deactivate(u)}
-                      className="rounded border border-amber-200 px-2 py-1 text-xs font-semibold text-amber-800"
+                      onClick={() => openEdit(u)}
+                      className="rounded border px-2 py-1 text-xs font-semibold text-slate-700"
                     >
-                      Deactivate
+                      Edit
                     </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => remove(u)}
-                    className="rounded border border-red-200 px-2 py-1 text-xs font-semibold text-red-600"
-                  >
-                    Delete
-                  </button>
-                </div>
-              </li>
-            ))
+                    {!protected && u.is_active && (
+                      <button
+                        type="button"
+                        onClick={() => deactivate(u)}
+                        className="rounded border border-amber-200 px-2 py-1 text-xs font-semibold text-amber-800"
+                      >
+                        Deactivate
+                      </button>
+                    )}
+                    {!protected && (
+                      <button
+                        type="button"
+                        onClick={() => remove(u)}
+                        className="rounded border border-red-200 px-2 py-1 text-xs font-semibold text-red-600"
+                      >
+                        Delete
+                      </button>
+                    )}
+                  </div>
+                </li>
+              );
+            })
           )}
         </ul>
       </div>
