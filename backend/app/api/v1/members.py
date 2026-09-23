@@ -24,6 +24,14 @@ import secrets
 router = APIRouter(prefix="/members", tags=["members / ChMS"])
 
 STAFF_CREATE_ROLES = ("member", "leader", "secretary", "pastor", "admin", "treasurer")
+# Seeded root account — role/active/delete only via DB seed, not the admin UI
+SYSTEM_ADMIN_EMAIL = "admin@churchplatform.com"
+
+
+def is_protected_system_user(user: User) -> bool:
+    if getattr(user, "is_superuser", False):
+        return True
+    return (user.email or "").lower().strip() == SYSTEM_ADMIN_EMAIL
 
 
 class VisitorCreate(BaseModel):
@@ -90,7 +98,8 @@ async def get_user_detail(user_id: int, db: DbSession, _: AdminUser):
             "phone": getattr(user, "phone", None),
             "role": user.role,
             "is_active": user.is_active,
-            "is_superuser": user.is_superuser,
+            "is_superuser": bool(getattr(user, "is_superuser", False)),
+            "is_system_protected": is_protected_system_user(user),
             "created_at": user.created_at.isoformat() if user.created_at else None,
         },
         "profile": {
@@ -113,7 +122,6 @@ async def get_user_detail(user_id: int, db: DbSession, _: AdminUser):
 async def member_directory(
     db: DbSession, _: LeaderUser, q: str = "", limit: int = 30
 ):
-    """Search people by name or email for attendance check-in."""
     query = (
         select(User, MemberProfile)
         .outerjoin(MemberProfile, MemberProfile.user_id == User.id)
@@ -151,6 +159,11 @@ async def create_user_staff(payload: UserCreateStaff, db: DbSession, _: AdminUse
     existing = await db.execute(select(User).where(User.email == payload.email))
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="Email already registered")
+    if (payload.email or "").lower().strip() == SYSTEM_ADMIN_EMAIL:
+        raise HTTPException(
+            status_code=400,
+            detail="Reserved system administrator email — change only via database seed",
+        )
     role = payload.role if payload.role in STAFF_CREATE_ROLES else "member"
     user = User(
         email=payload.email,
@@ -158,6 +171,7 @@ async def create_user_staff(payload: UserCreateStaff, db: DbSession, _: AdminUse
         full_name=payload.full_name,
         phone=payload.phone,
         role=role,
+        is_superuser=False,
     )
     db.add(user)
     await db.flush()
@@ -180,11 +194,24 @@ async def update_user_staff(
         raise HTTPException(status_code=404, detail="User not found")
 
     data = payload.model_dump(exclude_unset=True)
+    protected = is_protected_system_user(user)
+
+    if protected:
+        if "role" in data and data["role"] is not None and data["role"] != user.role:
+            raise HTTPException(
+                status_code=400,
+                detail="System administrator role can only be changed via database seed",
+            )
+        if "is_active" in data and data["is_active"] is False:
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot deactivate the system administrator",
+            )
 
     if "role" in data and data["role"] is not None:
         if data["role"] not in STAFF_CREATE_ROLES:
             raise HTTPException(status_code=400, detail="Invalid role")
-        if user.role == "admin" and data["role"] != "admin":
+        if user.role == "admin" and data["role"] != "admin" and not protected:
             admin_count = (
                 await db.execute(
                     select(User).where(
@@ -197,7 +224,8 @@ async def update_user_staff(
                     status_code=400,
                     detail="Cannot demote the last active admin",
                 )
-        user.role = data["role"]
+        if not protected or data["role"] == user.role:
+            user.role = data["role"]
 
     if "full_name" in data and data["full_name"] is not None:
         name = str(data["full_name"]).strip()
@@ -208,7 +236,7 @@ async def update_user_staff(
     if "phone" in data:
         user.phone = (str(data["phone"]).strip() or None) if data["phone"] is not None else None
 
-    if "is_active" in data and data["is_active"] is not None:
+    if "is_active" in data and data["is_active"] is not None and not protected:
         if user.id == current_user.id and data["is_active"] is False:
             raise HTTPException(status_code=400, detail="You cannot deactivate yourself")
         if user.role == "admin" and data["is_active"] is False:
@@ -243,6 +271,12 @@ async def delete_user_staff(user_id: int, db: DbSession, current_user: AdminUser
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+
+    if is_protected_system_user(user):
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot delete the system administrator — change only via database seed",
+        )
 
     if user.role == "admin":
         admin_count = (
