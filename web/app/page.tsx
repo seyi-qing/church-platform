@@ -40,11 +40,19 @@ type LiveSession = {
   status: string;
 };
 
+type GalleryPhoto = {
+  id: number;
+  title: string;
+  image_url: string;
+  caption: string | null;
+};
+
 export default function HomePage() {
   const [sermons, setSermons] = useState<MediaItem[]>([]);
   const [events, setEvents] = useState<EventItem[]>([]);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [live, setLive] = useState<LiveSession | null>(null);
+  const [photos, setPhotos] = useState<GalleryPhoto[]>([]);
   const [dismissedPin, setDismissedPin] = useState(false);
 
   useEffect(() => {
@@ -80,6 +88,14 @@ export default function HomePage() {
       .then((d) => setLive(d && d.id ? d : null))
       .catch(() => {});
 
+    fetch(`${API_URL}/gallery/photos?published_only=true&limit=12`, {
+      signal: ctrl.signal,
+      cache: "no-store",
+    })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((d) => setPhotos(Array.isArray(d) ? d : []))
+      .catch(() => {});
+
     return () => {
       clearTimeout(t);
       ctrl.abort();
@@ -88,7 +104,6 @@ export default function HomePage() {
 
   const pinned = announcements.find((a) => a.pinned) || announcements[0] || null;
   const rest = announcements.filter((a) => !pinned || a.id !== pinned.id).slice(0, 4);
-  const nextEvent = events[0] || null;
 
   return (
     <div className="space-y-12">
@@ -133,15 +148,15 @@ export default function HomePage() {
         </div>
       )}
 
-      <section className="overflow-hidden rounded-2xl bg-gradient-to-br from-brand-800 via-brand-700 to-brand-600 px-6 py-12 text-white shadow-lg sm:px-10 sm:py-16">
+      <section className="overflow-hidden rounded-2xl bg-gradient-to-br from-brand-800 via-brand-700 to-brand-600 px-6 py-12 text-center text-white shadow-lg sm:px-10 sm:py-16 sm:text-left">
         <h1 className="text-3xl font-bold tracking-tight sm:text-4xl md:text-5xl">
           Welcome to {BRAND.name}
         </h1>
-        <p className="mt-4 max-w-xl text-lg text-blue-100">{BRAND.tagline}</p>
-        <p className="mt-2 max-w-xl text-sm text-blue-200/90">
+        <p className="mx-auto mt-4 max-w-xl text-lg text-blue-100 sm:mx-0">{BRAND.tagline}</p>
+        <p className="mx-auto mt-2 max-w-xl text-sm text-blue-200/90 sm:mx-0">
           Join us this Sunday in person or online. Grow in faith, serve together, and find community.
         </p>
-        <div className="mt-8 flex flex-wrap gap-3">
+        <div className="mt-8 flex flex-wrap justify-center gap-3 sm:justify-start">
           <Link
             href="/live"
             className="rounded-lg bg-white px-6 py-3 text-sm font-bold text-brand-800 shadow hover:bg-blue-50"
@@ -169,38 +184,39 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="grid gap-4 sm:grid-cols-3">
-        <Link
-          href="/sermons"
-          className="rounded-xl border bg-white p-5 shadow-sm transition hover:border-brand-200 hover:shadow-md"
-        >
-          <p className="text-xs font-bold uppercase tracking-wide text-brand-600">Messages</p>
-          <p className="mt-1 font-semibold text-slate-900">Sermons & media</p>
-          <p className="mt-1 text-sm text-slate-500">Video, audio, and written teaching</p>
-        </Link>
-        <Link
-          href="/events"
-          className="rounded-xl border bg-white p-5 shadow-sm transition hover:border-brand-200 hover:shadow-md"
-        >
-          <p className="text-xs font-bold uppercase tracking-wide text-brand-600">Gather</p>
-          <p className="mt-1 font-semibold text-slate-900">
-            {nextEvent ? nextEvent.title : "Upcoming events"}
-          </p>
-          <p className="mt-1 text-sm text-slate-500">
-            {nextEvent
-              ? new Date(nextEvent.start_at).toLocaleString()
-              : "Services and community gatherings"}
-          </p>
-        </Link>
-        <Link
-          href="/give"
-          className="rounded-xl border border-brand-100 bg-brand-50 p-5 shadow-sm transition hover:border-brand-200 hover:shadow-md"
-        >
-          <p className="text-xs font-bold uppercase tracking-wide text-brand-700">Generosity</p>
-          <p className="mt-1 font-semibold text-slate-900">Give online</p>
-          <p className="mt-1 text-sm text-slate-600">Tithes, offerings, and special gifts</p>
-        </Link>
-      </section>
+      {/* Photo strip instead of redundant shortcut cards */}
+      {photos.length > 0 && (
+        <section>
+          <div className="mb-3 flex items-end justify-between gap-4">
+            <div>
+              <h2 className="text-xl font-bold text-slate-900">Life at {BRAND.name}</h2>
+              <p className="text-sm text-slate-500">From our gallery</p>
+            </div>
+            <Link href="/gallery" className="text-sm font-semibold text-brand-600 hover:underline">
+              Full gallery
+            </Link>
+          </div>
+          <div className="-mx-1 flex gap-3 overflow-x-auto px-1 pb-2 snap-x snap-mandatory">
+            {photos.map((p) => (
+              <Link
+                key={p.id}
+                href="/gallery"
+                className="w-[72%] shrink-0 snap-center overflow-hidden rounded-xl border bg-white shadow-sm sm:w-[40%] md:w-[28%]"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={p.image_url}
+                  alt={p.title}
+                  className="aspect-[4/3] w-full object-cover"
+                  loading="lazy"
+                  referrerPolicy="no-referrer"
+                />
+                <p className="truncate px-3 py-2 text-sm font-medium text-slate-800">{p.title}</p>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
 
       {announcements.length > 0 && (
         <section>

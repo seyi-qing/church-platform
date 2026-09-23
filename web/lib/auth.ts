@@ -59,5 +59,11 @@ export function isLoggedIn(): boolean {
 }
 
 export function isStaffRole(role?: string | null): boolean {
-  return !!role && ["admin", "pastor", "leader", "secretary"].includes(role);
+  return (
+    !!role && ["admin", "pastor", "leader", "secretary", "treasurer"].includes(role)
+  );
+}
+
+export function isFinanceRole(role?: string | null): boolean {
+  return !!role && ["admin", "pastor", "treasurer"].includes(role);
 }

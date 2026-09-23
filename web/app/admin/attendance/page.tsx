@@ -21,6 +21,17 @@ type Person = {
   membership_status: string;
 };
 
+function friendlyError(msg: string) {
+  const m = (msg || "").toLowerCase();
+  if (m.includes("failed to fetch") || m.includes("network") || m.includes("abort")) {
+    return "Could not reach the server (often a cold start). Wait ~30s and tap Retry.";
+  }
+  if (m.includes("unauthorized")) {
+    return "Session expired — sign in again via Staff login.";
+  }
+  return msg || "Request failed";
+}
+
 export default function AdminAttendancePage() {
   const [rows, setRows] = useState<Row[]>([]);
   const [q, setQ] = useState("");
@@ -30,11 +41,15 @@ export default function AdminAttendancePage() {
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
   const [searching, setSearching] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   function load() {
+    setLoading(true);
+    setError("");
     apiFetch<Row[]>("/members/attendance?limit=100")
       .then(setRows)
-      .catch((e) => setError(e.message));
+      .catch((e) => setError(friendlyError(e.message)))
+      .finally(() => setLoading(false));
   }
 
   useEffect(() => {
@@ -79,19 +94,35 @@ export default function AdminAttendancePage() {
       setNotes("");
       load();
     } catch (err: any) {
-      setError(err.message);
+      setError(friendlyError(err.message));
     }
   }
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Attendance</h1>
-        <p className="text-sm text-slate-500">
-          Search by <strong>name</strong> and check in — no need to remember profile IDs.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold">Attendance</h1>
+          <p className="text-sm text-slate-500">
+            Search by <strong>name</strong> and check in — no need to remember profile IDs.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={load}
+          className="rounded-lg border px-3 py-1.5 text-xs font-semibold text-slate-700"
+        >
+          Retry load
+        </button>
       </div>
-      {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+      {error && (
+        <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+          <p>{error}</p>
+          <button type="button" onClick={load} className="mt-1 text-xs font-semibold underline">
+            Retry
+          </button>
+        </div>
+      )}
       {info && <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{info}</p>}
 
       <form onSubmit={checkIn} className="space-y-3 rounded-xl border bg-white p-4 shadow-sm">
@@ -151,6 +182,7 @@ export default function AdminAttendancePage() {
         </button>
       </form>
 
+      {loading && <p className="text-sm text-slate-500">Loading check-ins…</p>}
       <ul className="divide-y rounded-xl border bg-white">
         {rows.map((r) => (
           <li key={r.id} className="flex justify-between gap-3 px-4 py-3 text-sm">
@@ -166,7 +198,7 @@ export default function AdminAttendancePage() {
             </span>
           </li>
         ))}
-        {rows.length === 0 && (
+        {!loading && rows.length === 0 && (
           <li className="px-4 py-8 text-center text-sm text-slate-500">No check-ins yet.</li>
         )}
       </ul>
