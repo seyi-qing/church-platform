@@ -11,3 +11,4 @@ from app.models.care import CareRequest, CareNote, CareFollowUp
 from app.models.ops import Announcement, Expense
 from app.models.gallery import GalleryPhoto
 from app.models.inquiry import ContactInquiry
+from app.models.community import StaffMeeting
