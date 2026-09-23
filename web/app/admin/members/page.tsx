@@ -9,8 +9,24 @@ type User = {
   full_name: string;
   role: string;
   is_active: boolean;
-  phone?: string;
+  phone?: string | null;
 };
+
+const ROLES = [
+  { value: "member", label: "Member" },
+  { value: "leader", label: "Leader" },
+  { value: "secretary", label: "Secretary" },
+  { value: "treasurer", label: "Treasurer" },
+  { value: "pastor", label: "Pastor" },
+  { value: "admin", label: "Admin" },
+] as const;
+
+function roleBadgeClass(role: string) {
+  if (role === "admin" || role === "pastor") return "bg-purple-100 text-purple-800";
+  if (role === "treasurer") return "bg-amber-100 text-amber-900";
+  if (role === "secretary" || role === "leader") return "bg-blue-100 text-blue-800";
+  return "bg-slate-100 text-slate-700";
+}
 
 export default function AdminMembersPage() {
   const [users, setUsers] = useState<User[]>([]);
@@ -20,11 +36,21 @@ export default function AdminMembersPage() {
   const [phone, setPhone] = useState("");
   const [role, setRole] = useState("member");
   const [error, setError] = useState("");
+  const [info, setInfo] = useState("");
   const [loading, setLoading] = useState(false);
+  const [editId, setEditId] = useState<number | null>(null);
+  const [editForm, setEditForm] = useState({
+    full_name: "",
+    phone: "",
+    role: "member",
+    is_active: true,
+    password: "",
+  });
 
   async function load() {
     try {
-      setUsers(await apiFetch<User[]>("/members/users"));
+      setError("");
+      setUsers(await apiFetch<User[]>("/members/users?limit=200"));
     } catch (e: any) {
       setError(e.message);
     }
@@ -34,26 +60,50 @@ export default function AdminMembersPage() {
     load();
   }, []);
 
+  function openEdit(u: User) {
+    setEditId(u.id);
+    setEditForm({
+      full_name: u.full_name || "",
+      phone: u.phone || "",
+      role: u.role || "member",
+      is_active: u.is_active,
+      password: "",
+    });
+    setError("");
+    setInfo("");
+  }
+
+  function cancelEdit() {
+    setEditId(null);
+    setEditForm({ full_name: "", phone: "", role: "member", is_active: true, password: "" });
+  }
+
   async function create() {
     setError("");
+    setInfo("");
+    if (!fullName.trim() || !email.trim() || password.length < 8) {
+      setError("Name, email, and password (min 8 characters) are required.");
+      return;
+    }
     setLoading(true);
     try {
-      // 💡 Enhanced payload matching backend schema values
       await apiFetch("/members/users", {
         method: "POST",
-        body: JSON.stringify({ 
-          email, 
-          full_name: fullName, 
-          password, 
-          role, 
-          phone: phone || undefined 
+        body: JSON.stringify({
+          email: email.trim(),
+          full_name: fullName.trim(),
+          password,
+          role,
+          phone: phone.trim() || null,
         }),
       });
       setEmail("");
       setFullName("");
       setPassword("");
       setPhone("");
-      load();
+      setRole("member");
+      setInfo(`Created ${role} account.`);
+      await load();
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -61,65 +111,269 @@ export default function AdminMembersPage() {
     }
   }
 
+  async function saveEdit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editId) return;
+    setError("");
+    setInfo("");
+    setLoading(true);
+    try {
+      const body: Record<string, unknown> = {
+        full_name: editForm.full_name.trim(),
+        phone: editForm.phone.trim() || null,
+        role: editForm.role,
+        is_active: editForm.is_active,
+      };
+      if (editForm.password.trim().length >= 8) {
+        body.password = editForm.password.trim();
+      }
+      await apiFetch(`/members/users/${editId}`, {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      });
+      setInfo("User updated.");
+      cancelEdit();
+      await load();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function deactivate(u: User) {
+    if (!confirm(`Deactivate ${u.full_name || u.email}? They will not be able to sign in.`)) return;
+    setError("");
+    try {
+      await apiFetch(`/members/users/${u.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ is_active: false }),
+      });
+      setInfo("User deactivated.");
+      await load();
+    } catch (err: any) {
+      setError(err.message);
+    }
+  }
+
+  async function remove(u: User) {
+    if (
+      !confirm(
+        `Permanently delete ${u.full_name || u.email}? This cannot be undone. Prefer Deactivate if unsure.`
+      )
+    )
+      return;
+    setError("");
+    try {
+      await apiFetch(`/members/users/${u.id}`, { method: "DELETE" });
+      setInfo("User deleted.");
+      if (editId === u.id) cancelEdit();
+      await load();
+    } catch (err: any) {
+      setError(err.message);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-slate-900">Members & Staff Registry</h1>
-        <p className="text-sm text-slate-500">Manage church members and provision user accounts for pastors, leaders, or secretaries.</p>
+        <p className="text-sm text-slate-500">
+          Add, edit, deactivate, or delete accounts. Roles: member, leader, secretary, treasurer,
+          pastor, admin.
+        </p>
       </div>
 
-      {error && <p className="text-sm font-semibold rounded-lg bg-red-50 px-3 py-2 text-red-600">{error}</p>}
-      
-      {/* 🛠️ Dynamic Forms Header Section */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 rounded-xl border bg-white p-4 shadow-sm">
-        <input placeholder="Full name" value={fullName} onChange={(e) => setFullName(e.target.value)} className="rounded border px-3 py-2 text-sm focus:outline-none focus:border-brand-500" />
-        <input placeholder="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="rounded border px-3 py-2 text-sm focus:outline-none focus:border-brand-500" />
-        <input placeholder="Phone number" value={phone} onChange={(e) => setPhone(e.target.value)} className="rounded border px-3 py-2 text-sm focus:outline-none focus:border-brand-500" />
-        <input placeholder="Password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="rounded border px-3 py-2 text-sm focus:outline-none focus:border-brand-500" />
-        
-        <select value={role} onChange={(e) => setRole(e.target.value)} className="rounded border px-3 py-2 text-sm bg-white focus:outline-none focus:border-brand-500">
-          <option value="member">Member</option>
-          <option value="leader">Leader</option>
-          <option value="secretary">Secretary</option> 
-          <option value="pastor">Pastor</option>
-          <option value="admin">Admin</option>
+      {error && (
+        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-semibold text-red-600">{error}</p>
+      )}
+      {info && (
+        <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800">
+          {info}
+        </p>
+      )}
+
+      <div className="grid grid-cols-1 gap-3 rounded-xl border bg-white p-4 shadow-sm sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
+        <input
+          placeholder="Full name"
+          value={fullName}
+          onChange={(e) => setFullName(e.target.value)}
+          className="rounded border px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
+        />
+        <input
+          placeholder="Email"
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          className="rounded border px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
+        />
+        <input
+          placeholder="Phone number"
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+          className="rounded border px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
+        />
+        <input
+          placeholder="Password (min 8)"
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          className="rounded border px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
+        />
+        <select
+          value={role}
+          onChange={(e) => setRole(e.target.value)}
+          className="rounded border bg-white px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
+        >
+          {ROLES.map((r) => (
+            <option key={r.value} value={r.value}>
+              {r.label}
+            </option>
+          ))}
         </select>
-        
-        <button type="button" onClick={create} disabled={loading} className="rounded-lg bg-brand-600 px-4 py-2 text-sm text-white font-medium hover:bg-brand-700 transition disabled:opacity-50">
-          {loading ? "Creating..." : "New User"}
+        <button
+          type="button"
+          onClick={create}
+          disabled={loading}
+          className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-700 disabled:opacity-50"
+        >
+          {loading && !editId ? "Creating…" : "New User"}
         </button>
       </div>
 
-      {/* 📋 Live Dynamic Listing Workspace */}
-      <div className="rounded-xl border bg-white shadow-sm overflow-hidden">
-        <div className="px-4 py-3 bg-slate-50 border-b">
-          <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Registered Accounts ({users.length})</span>
+      {editId && (
+        <form
+          onSubmit={saveEdit}
+          className="space-y-3 rounded-xl border border-blue-200 bg-blue-50/40 p-4 shadow-sm"
+        >
+          <p className="text-sm font-semibold text-slate-900">Edit user #{editId}</p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <input
+              required
+              placeholder="Full name"
+              value={editForm.full_name}
+              onChange={(e) => setEditForm({ ...editForm, full_name: e.target.value })}
+              className="rounded border px-3 py-2 text-sm"
+            />
+            <input
+              placeholder="Phone"
+              value={editForm.phone}
+              onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+              className="rounded border px-3 py-2 text-sm"
+            />
+            <select
+              value={editForm.role}
+              onChange={(e) => setEditForm({ ...editForm, role: e.target.value })}
+              className="rounded border bg-white px-3 py-2 text-sm"
+            >
+              {ROLES.map((r) => (
+                <option key={r.value} value={r.value}>
+                  {r.label}
+                </option>
+              ))}
+            </select>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={editForm.is_active}
+                onChange={(e) => setEditForm({ ...editForm, is_active: e.target.checked })}
+              />
+              Active (can sign in)
+            </label>
+            <input
+              placeholder="New password (optional, min 8)"
+              type="password"
+              value={editForm.password}
+              onChange={(e) => setEditForm({ ...editForm, password: e.target.value })}
+              className="rounded border px-3 py-2 text-sm sm:col-span-2"
+            />
+          </div>
+          <p className="text-xs text-slate-500">Email cannot be changed here.</p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="submit"
+              disabled={loading}
+              className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+            >
+              {loading ? "Saving…" : "Save changes"}
+            </button>
+            <button
+              type="button"
+              onClick={cancelEdit}
+              className="rounded-lg border px-4 py-2 text-sm font-semibold text-slate-700"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
+
+      <div className="overflow-hidden rounded-xl border bg-white shadow-sm">
+        <div className="border-b bg-slate-50 px-4 py-3">
+          <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
+            Registered accounts ({users.length})
+          </span>
         </div>
         <ul className="divide-y">
           {users.length === 0 ? (
-            <li className="px-4 py-8 text-center text-sm text-slate-500">No registered system members found.</li>
+            <li className="px-4 py-8 text-center text-sm text-slate-500">
+              No registered system members found.
+            </li>
           ) : (
             users.map((u) => (
-              <li key={u.id} className="px-4 py-3 flex items-center justify-between hover:bg-slate-50 transition">
-                <div>
-                  <p className="font-semibold text-sm text-slate-900">{u.full_name || "Unnamed User"}</p>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    {u.email} {u.phone && `· ${u.phone}`}
+              <li
+                key={u.id}
+                className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 transition hover:bg-slate-50"
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-slate-900">
+                    {u.full_name || "Unnamed User"}
+                  </p>
+                  <p className="mt-0.5 text-xs text-slate-500">
+                    {u.email}
+                    {u.phone ? ` · ${u.phone}` : ""}
                   </p>
                 </div>
-                <div className="flex items-center gap-3">
-                  <span className={`text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full ${
-                    u.role === "admin" || u.role === "pastor" ? "bg-purple-100 text-purple-800" :
-                    u.role === "secretary" || u.role === "leader" ? "bg-blue-100 text-blue-800" :
-                    "bg-slate-100 text-slate-700"
-                  }`}>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
+                      roleBadgeClass(u.role)
+                    }`}
+                  >
                     {u.role}
                   </span>
-                  <span className={`text-[10px] font-bold rounded px-1.5 py-0.5 ${
-                    u.is_active ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-red-50 text-red-700 border border-red-200"
-                  }`}>
+                  <span
+                    className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${
+                      u.is_active
+                        ? "border border-emerald-200 bg-emerald-50 text-emerald-700"
+                        : "border border-red-200 bg-red-50 text-red-700"
+                    }`}
+                  >
                     {u.is_active ? "Active" : "Inactive"}
                   </span>
+                  <button
+                    type="button"
+                    onClick={() => openEdit(u)}
+                    className="rounded border px-2 py-1 text-xs font-semibold text-slate-700"
+                  >
+                    Edit
+                  </button>
+                  {u.is_active && (
+                    <button
+                      type="button"
+                      onClick={() => deactivate(u)}
+                      className="rounded border border-amber-200 px-2 py-1 text-xs font-semibold text-amber-800"
+                    >
+                      Deactivate
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => remove(u)}
+                    className="rounded border border-red-200 px-2 py-1 text-xs font-semibold text-red-600"
+                  >
+                    Delete
+                  </button>
                 </div>
               </li>
             ))
@@ -128,4 +382,4 @@ export default function AdminMembersPage() {
       </div>
     </div>
   );
-  }
+}

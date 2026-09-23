@@ -35,9 +35,19 @@ class VisitorCreate(BaseModel):
     assign_to: int | None = None
 
 
+class UserStaffUpdate(BaseModel):
+    full_name: str | None = None
+    phone: str | None = None
+    role: str | None = None
+    is_active: bool | None = None
+    password: str | None = Field(default=None, min_length=8)
+
+
 @router.get("/users", response_model=list[UserOut])
-async def list_users(db: DbSession, _: AdminUser, skip: int = 0, limit: int = 100):
-    result = await db.execute(select(User).order_by(User.id).offset(skip).limit(limit))
+async def list_users(db: DbSession, _: AdminUser, skip: int = 0, limit: int = 200):
+    result = await db.execute(
+        select(User).order_by(User.id.desc()).offset(skip).limit(min(limit, 500))
+    )
     return result.scalars().all()
 
 
@@ -56,7 +66,6 @@ async def member_directory(
     term = (q or "").strip()
     if term:
         like = f"%{term}%"
-        # Name + email only — phone is optional on older DBs until column exists
         clauses = [User.full_name.ilike(like), User.email.ilike(like)]
         try:
             clauses.append(User.phone.ilike(like))
@@ -98,6 +107,105 @@ async def create_user_staff(payload: UserCreateStaff, db: DbSession, _: AdminUse
     db.add(MemberProfile(user_id=user.id, membership_status="active"))
     await db.flush()
     return user
+
+
+@router.patch("/users/{user_id}", response_model=UserOut)
+async def update_user_staff(
+    user_id: int,
+    payload: UserStaffUpdate,
+    db: DbSession,
+    current_user: AdminUser,
+):
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    data = payload.model_dump(exclude_unset=True)
+
+    if "role" in data and data["role"] is not None:
+        if data["role"] not in STAFF_CREATE_ROLES:
+            raise HTTPException(status_code=400, detail="Invalid role")
+        # Prevent removing the last active admin
+        if user.role == "admin" and data["role"] != "admin":
+            admin_count = (
+                await db.execute(
+                    select(User).where(
+                        User.role == "admin", User.is_active == True  # noqa: E712
+                    )
+                )
+            ).scalars().all()
+            if len(admin_count) <= 1 and user.id in [a.id for a in admin_count]:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Cannot demote the last active admin",
+                )
+        user.role = data["role"]
+
+    if "full_name" in data and data["full_name"] is not None:
+        name = str(data["full_name"]).strip()
+        if len(name) < 2:
+            raise HTTPException(status_code=400, detail="Name is too short")
+        user.full_name = name
+
+    if "phone" in data:
+        user.phone = (str(data["phone"]).strip() or None) if data["phone"] is not None else None
+
+    if "is_active" in data and data["is_active"] is not None:
+        if user.id == current_user.id and data["is_active"] is False:
+            raise HTTPException(status_code=400, detail="You cannot deactivate yourself")
+        if user.role == "admin" and data["is_active"] is False:
+            admin_count = (
+                await db.execute(
+                    select(User).where(
+                        User.role == "admin", User.is_active == True  # noqa: E712
+                    )
+                )
+            ).scalars().all()
+            if len(admin_count) <= 1:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Cannot deactivate the last active admin",
+                )
+        user.is_active = data["is_active"]
+
+    if data.get("password"):
+        user.hashed_password = get_password_hash(data["password"])
+
+    await db.flush()
+    await db.refresh(user)
+    return user
+
+
+@router.delete("/users/{user_id}")
+async def delete_user_staff(user_id: int, db: DbSession, current_user: AdminUser):
+    """Hard-delete a user. Prefer deactivating via PATCH when possible."""
+    if user_id == current_user.id:
+        raise HTTPException(status_code=400, detail="You cannot delete yourself")
+
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if user.role == "admin":
+        admin_count = (
+            await db.execute(
+                select(User).where(User.role == "admin", User.is_active == True)  # noqa: E712
+            )
+        ).scalars().all()
+        if len(admin_count) <= 1 and any(a.id == user.id for a in admin_count):
+            raise HTTPException(status_code=400, detail="Cannot delete the last active admin")
+
+    # Remove member profile first if present (simple cascade for registry)
+    prof = await db.execute(select(MemberProfile).where(MemberProfile.user_id == user.id))
+    profile = prof.scalar_one_or_none()
+    if profile:
+        await db.delete(profile)
+
+    await db.delete(user)
+    await db.flush()
+    return {"ok": True, "deleted_id": user_id}
 
 
 @router.post("/visitors", status_code=status.HTTP_201_CREATED)
