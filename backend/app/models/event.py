@@ -20,6 +20,9 @@ class Event(Base):
     requires_registration: Mapped[bool] = mapped_column(Boolean, default=False)
     max_attendees: Mapped[int | None] = mapped_column(Integer)
     cover_image_url: Mapped[str | None] = mapped_column(String(500))
+    organization_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("organizations.id"), nullable=True, index=True
+    )
     created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
