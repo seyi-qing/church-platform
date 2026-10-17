@@ -17,42 +17,36 @@ const ACTIONS = [
     label: "Add media",
     desc: "Sermon or playlist item",
     icon: "🎬",
-    color: "bg-violet-50 text-violet-700 border-violet-100",
   },
   {
     href: "/admin/events",
     label: "Add event",
     desc: "Service or gathering",
     icon: "📅",
-    color: "bg-sky-50 text-sky-700 border-sky-100",
   },
   {
     href: "/admin/livestream",
     label: "Livestream",
     desc: "YouTube live URL",
     icon: "🔴",
-    color: "bg-rose-50 text-rose-700 border-rose-100",
   },
   {
     href: "/admin/members",
     label: "Members",
     desc: "Accounts & roles",
     icon: "👥",
-    color: "bg-emerald-50 text-emerald-700 border-emerald-100",
   },
   {
     href: "/admin/announcements",
     label: "Announce",
     desc: "Church-wide message",
     icon: "📢",
-    color: "bg-amber-50 text-amber-800 border-amber-100",
   },
   {
     href: "/admin/giving",
     label: "Giving",
     desc: "Donations & funds",
     icon: "💝",
-    color: "bg-pink-50 text-pink-700 border-pink-100",
   },
 ];
 
@@ -60,38 +54,25 @@ function StatCard({
   label,
   value,
   href,
-  icon,
-  accent,
+  bar,
 }: {
   label: string;
   value: string | number;
   href: string;
-  icon: string;
-  accent: string;
+  bar: string;
 }) {
   return (
     <Link
       href={href}
-      className="group relative overflow-hidden rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+      className="rounded-2xl border border-slate-200/90 bg-white p-4 shadow-sm transition hover:border-slate-300 hover:shadow-md"
     >
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-            {label}
-          </p>
-          <p className="mt-2 text-3xl font-extrabold tabular-nums tracking-tight text-slate-900">
-            {value}
-          </p>
-        </div>
-        <span
-          className={`flex h-11 w-11 items-center justify-center rounded-xl text-lg ${accent}`}
-        >
-          {icon}
-        </span>
-      </div>
-      <p className="mt-3 text-xs font-medium text-blue-600 opacity-0 transition group-hover:opacity-100">
-        Open →
+      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+        {label}
       </p>
+      <p className="mt-1 text-2xl font-extrabold tabular-nums tracking-tight text-slate-900 sm:text-3xl">
+        {value}
+      </p>
+      <div className={`mt-2 h-1 w-10 rounded-full bg-gradient-to-r ${bar}`} />
     </Link>
   );
 }
@@ -160,34 +141,30 @@ export default function AdminDashboardPage() {
         </p>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatCard
           label="Members"
           value={stats?.members ?? "—"}
           href="/admin/members"
-          icon="👥"
-          accent="bg-emerald-50"
+          bar="from-emerald-500 to-teal-600"
         />
         <StatCard
           label="Media"
           value={stats?.media ?? "—"}
           href="/admin/media"
-          icon="🎬"
-          accent="bg-violet-50"
+          bar="from-violet-500 to-indigo-600"
         />
         <StatCard
           label="Events"
           value={stats?.events ?? "—"}
           href="/admin/events"
-          icon="📅"
-          accent="bg-sky-50"
+          bar="from-sky-500 to-blue-600"
         />
         <StatCard
           label="Donations"
           value={stats?.donations ?? "—"}
           href="/admin/giving"
-          icon="💝"
-          accent="bg-rose-50"
+          bar="from-rose-500 to-pink-600"
         />
       </div>
 

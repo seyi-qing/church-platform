@@ -1,17 +1,21 @@
 import { BRAND } from "@/lib/brand";
 
-/** Simple mark + name. Swap for an <img> when you have a real logo URL. */
+/** Simple mark + name. Pass `name` for multi-tenant branding. */
 export function ChurchLogo({
   className = "",
   showText = true,
   size = 32,
+  name,
 }: {
   className?: string;
   showText?: boolean;
   size?: number;
+  /** Overrides BRAND.name (tenant-aware public site / Act-as) */
+  name?: string | null;
 }) {
+  const label = (name && name.trim()) || BRAND.name;
   return (
-    <span className={`inline-flex items-center gap-2 ${className}`}>
+    <span className={`inline-flex min-w-0 items-center gap-2 ${className}`}>
       <span
         className="inline-flex shrink-0 items-center justify-center rounded-full bg-brand-700 text-white shadow-sm"
         style={{ width: size, height: size }}
@@ -22,8 +26,8 @@ export function ChurchLogo({
         </svg>
       </span>
       {showText && (
-        <span className="text-lg font-extrabold tracking-tight text-brand-700">
-          {BRAND.name}
+        <span className="truncate text-lg font-extrabold tracking-tight text-brand-700">
+          {label}
         </span>
       )}
     </span>
