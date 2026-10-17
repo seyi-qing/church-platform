@@ -1,191 +1,294 @@
-import Link from "next/link";
-import type { Metadata } from "next";
+"use client";
 
-export const metadata: Metadata = {
-  title: "ChurchPlatform · Church apps, giving & media",
-  description:
-    "Launch a branded church website, member app experience, livestream, giving, and staff tools — without building everything from scratch.",
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { apiFetch } from "@/lib/api";
+
+type Org = {
+  id: number;
+  name: string;
+  slug: string;
+  plan: string;
+  is_active: boolean;
+  service_times: string | null;
+  address: string | null;
 };
 
-const FEATURES = [
-  {
-    title: "Branded public site",
-    body: "Home, sermons, live, give, events, and gallery that look like your church — not a generic template.",
-  },
-  {
-    title: "Member experience",
-    body: "Sign-in, profile, giving history, and a dashboard path that feels like an app after login.",
-  },
-  {
-    title: "Watch & live",
-    body: "Sermon library, series-ready media, and livestream that points to the tools churches already use.",
-  },
-  {
-    title: "Give with confidence",
-    body: "One-time and recurring gifts with Stripe, funds, and records staff can reconcile.",
-  },
-  {
-    title: "Staff command center",
-    body: "Members, visitors, groups, attendance, inquiries, announcements, and pastoral care in one admin.",
-  },
-  {
-    title: "Roles that match real teams",
-    body: "Admin, pastor, leader, secretary, treasurer — each sees the tools they need.",
-  },
-];
-
-const STEPS = [
-  { n: "1", t: "Connect your church", d: "Brand, campuses, and staff roles." },
-  { n: "2", t: "Publish content", d: "Sermons, live links, events, gallery." },
-  { n: "3", t: "Invite people", d: "Members sign in; guests explore the public site." },
-  { n: "4", t: "Run Sunday", d: "Go live, take gifts, follow up inquiries." },
-];
-
-export default function PlatformLandingPage() {
+function Kpi({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string | number;
+  tone: "violet" | "green" | "amber" | "slate";
+}) {
+  const tones = {
+    violet: "from-violet-50 to-white border-violet-200 text-violet-900",
+    green: "from-emerald-50 to-white border-emerald-200 text-emerald-900",
+    amber: "from-amber-50 to-white border-amber-200 text-amber-900",
+    slate: "from-slate-50 to-white border-slate-200 text-slate-900",
+  };
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100">
-      <header className="border-b border-slate-800/80 bg-slate-950/90 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-4">
-          <div className="flex items-center gap-2">
-            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-600 text-sm font-bold text-white">
-              CP
-            </span>
-            <span className="text-sm font-bold tracking-tight text-white sm:text-base">
-              ChurchPlatform
-            </span>
-          </div>
-          <nav className="flex items-center gap-2 sm:gap-3">
-            <Link
-              href="/#features"
-              className="hidden text-sm text-slate-400 hover:text-white sm:inline"
-            >
-              Product
-            </Link>
-            <Link
-              href="/"
-              className="rounded-lg px-3 py-2 text-sm font-medium text-slate-300 hover:bg-slate-800"
-            >
-              Live demo church
-            </Link>
-            <Link
-              href="/admin/login"
-              className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-500"
-            >
-              Staff login
-            </Link>
-          </nav>
-        </div>
-      </header>
+    <div className={`rounded-xl border bg-gradient-to-br px-4 py-3 shadow-sm ${tones[tone]}`}>
+      <p className="text-[10px] font-semibold uppercase tracking-wide opacity-60">{label}</p>
+      <p className="mt-1 text-2xl font-bold tabular-nums">{value}</p>
+    </div>
+  );
+}
 
-      <main>
-        <section className="relative overflow-hidden">
-          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-blue-900/40 via-slate-950 to-slate-950" />
-          <div className="relative mx-auto max-w-6xl px-4 pb-20 pt-16 sm:pt-24">
-            <p className="text-center text-xs font-bold uppercase tracking-[0.2em] text-blue-400">
-              Church software · SaaS
-            </p>
-            <h1 className="mx-auto mt-4 max-w-3xl text-center text-4xl font-extrabold tracking-tight text-white sm:text-5xl lg:text-6xl">
-              The church app stack your team can actually run
-            </h1>
-            <p className="mx-auto mt-5 max-w-2xl text-center text-base text-slate-400 sm:text-lg">
-              Public website, member experience, livestream, giving, and staff tools — one platform.
-              Built for Sundays, not slide decks.
-            </p>
-            <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
-              <Link
-                href="/"
-                className="rounded-xl bg-white px-6 py-3 text-sm font-bold text-slate-900 shadow-lg hover:bg-slate-100"
-              >
-                See demo church site
-              </Link>
-              <Link
-                href="/admin/login"
-                className="rounded-xl border border-slate-600 px-6 py-3 text-sm font-semibold text-white hover:bg-slate-800"
-              >
-                Open staff dashboard
-              </Link>
-            </div>
-            <p className="mt-6 text-center text-xs text-slate-500">
-              Demo: Grace Church public site + full admin. Multi-tenant SaaS is the product roadmap.
-            </p>
-          </div>
-        </section>
+export default function PlatformDashboardPage() {
+  const [orgs, setOrgs] = useState<Org[]>([]);
+  const [error, setError] = useState("");
+  const [msg, setMsg] = useState("");
+  const [name, setName] = useState("");
+  const [slug, setSlug] = useState("");
+  const [plan, setPlan] = useState("starter");
+  const [busy, setBusy] = useState(false);
+  const [activeName, setActiveName] = useState<string | null>(null);
 
-        <section id="features" className="border-t border-slate-800 bg-slate-900/50 py-16">
-          <div className="mx-auto max-w-6xl px-4">
-            <h2 className="text-center text-2xl font-bold text-white sm:text-3xl">
-              Everything a modern church expects
-            </h2>
-            <p className="mx-auto mt-2 max-w-xl text-center text-sm text-slate-400">
-              The same surface area as products like Subsplash — owned by you, shaped for your church.
-            </p>
-            <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {FEATURES.map((f) => (
-                <div
-                  key={f.title}
-                  className="rounded-2xl border border-slate-800 bg-slate-950/80 p-5 shadow-sm"
-                >
-                  <h3 className="text-base font-semibold text-white">{f.title}</h3>
-                  <p className="mt-2 text-sm leading-relaxed text-slate-400">{f.body}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
+  useEffect(() => {
+    try {
+      setActiveName(localStorage.getItem("active_tenant_name"));
+    } catch {
+      /* ignore */
+    }
+    load();
+  }, []);
 
-        <section className="py-16">
-          <div className="mx-auto max-w-6xl px-4">
-            <h2 className="text-center text-2xl font-bold text-white">How churches go live</h2>
-            <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              {STEPS.map((s) => (
-                <div key={s.n} className="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-                  <span className="text-2xl font-extrabold text-blue-500">{s.n}</span>
-                  <p className="mt-2 font-semibold text-white">{s.t}</p>
-                  <p className="mt-1 text-sm text-slate-400">{s.d}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
+  async function load() {
+    try {
+      setError("");
+      const list = await apiFetch<Org[]>("/tenants");
+      setOrgs(Array.isArray(list) ? list : []);
+    } catch (e: any) {
+      setError(e.message || "Could not load tenants");
+    }
+  }
 
-        <section className="border-t border-slate-800 bg-blue-600 py-14">
-          <div className="mx-auto max-w-3xl px-4 text-center">
-            <h2 className="text-2xl font-bold text-white sm:text-3xl">
-              Ready to see it with real church content?
-            </h2>
-            <p className="mt-3 text-sm text-blue-100">
-              Browse the Grace Church demo site, or sign in as staff to walk the full admin.
-            </p>
-            <div className="mt-8 flex flex-wrap justify-center gap-3">
-              <Link
-                href="/"
-                className="rounded-xl bg-white px-6 py-3 text-sm font-bold text-blue-800 hover:bg-blue-50"
-              >
-                Visit public church site
-              </Link>
-              <Link
-                href="/login"
-                className="rounded-xl border border-white/40 px-6 py-3 text-sm font-semibold text-white hover:bg-blue-500"
-              >
-                Member sign in
-              </Link>
-            </div>
-          </div>
-        </section>
-      </main>
+  async function createOrg(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setMsg("");
+    setError("");
+    try {
+      await apiFetch("/tenants", {
+        method: "POST",
+        body: JSON.stringify({
+          name: name.trim(),
+          slug: slug.trim() || undefined,
+          plan,
+        }),
+      });
+      setName("");
+      setSlug("");
+      setMsg("Tenant created");
+      await load();
+    } catch (err: any) {
+      setError(err.message || "Create failed");
+    } finally {
+      setBusy(false);
+    }
+  }
 
-      <footer className="border-t border-slate-800 py-8 text-center text-xs text-slate-500">
-        <p>© {new Date().getFullYear()} ChurchPlatform · Product marketing</p>
-        <p className="mt-1">
-          <Link href="/" className="text-slate-400 hover:text-white">
-            Church site
-          </Link>
-          {" · "}
-          <Link href="/admin/login" className="text-slate-400 hover:text-white">
-            Admin
-          </Link>
+  async function actAs(id: number) {
+    setMsg("");
+    setError("");
+    try {
+      const org = await apiFetch<Org>(`/tenants/${id}/act-as`, { method: "POST" });
+      try {
+        localStorage.setItem("active_tenant_id", String(org.id));
+        localStorage.setItem("active_tenant_name", org.name);
+      } catch {
+        /* ignore */
+      }
+      setActiveName(org.name);
+      setMsg(`Working as ${org.name}. Open church admin to manage that tenant.`);
+    } catch (err: any) {
+      setError(err.message || "Could not switch tenant");
+    }
+  }
+
+  async function setPlanFor(id: number, next: string) {
+    try {
+      await apiFetch(`/tenants/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ plan: next }),
+      });
+      await load();
+    } catch (err: any) {
+      setError(err.message || "Plan update failed");
+    }
+  }
+
+  async function toggleActive(id: number, is_active: boolean) {
+    try {
+      await apiFetch(`/tenants/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ is_active: !is_active }),
+      });
+      await load();
+    } catch (err: any) {
+      setError(err.message || "Update failed");
+    }
+  }
+
+  const activeCount = orgs.filter((o) => o.is_active).length;
+
+  return (
+    <div className="space-y-8">
+      <div>
+        <h1 className="text-2xl font-bold text-slate-900">Platform · Churches & plans</h1>
+        <p className="mt-1 text-sm text-slate-500">
+          SaaS control plane — all tenants (same idea as your school platform console).
         </p>
-      </footer>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <Kpi label="Churches" value={orgs.length} tone="violet" />
+        <Kpi label="Active" value={activeCount} tone="green" />
+        <Kpi label="Inactive" value={orgs.length - activeCount} tone="amber" />
+        <Kpi label="Plans" value="3" tone="slate" />
+      </div>
+
+      {activeName && (
+        <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+          Working as: <strong>{activeName}</strong>
+          <span className="ml-2 text-xs text-sky-700">
+            Use Church admin tools for that tenant.
+          </span>
+        </div>
+      )}
+
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Link
+          href="#create"
+          className="rounded-xl border border-violet-200 bg-violet-50 p-4 shadow-sm hover:border-violet-300"
+        >
+          <p className="font-bold text-violet-900">Create tenant</p>
+          <p className="mt-1 text-xs text-violet-700">Provision a new church</p>
+        </Link>
+        <Link
+          href="/admin"
+          className="rounded-xl border bg-white p-4 shadow-sm hover:border-slate-300"
+        >
+          <p className="font-bold text-slate-900">Church admin</p>
+          <p className="mt-1 text-xs text-slate-500">Ops for active / default tenant</p>
+        </Link>
+        <Link
+          href="/admin/settings"
+          className="rounded-xl border bg-white p-4 shadow-sm hover:border-slate-300"
+        >
+          <p className="font-bold text-slate-900">Church settings</p>
+          <p className="mt-1 text-xs text-slate-500">Brand · service times</p>
+        </Link>
+      </div>
+
+      {error && (
+        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-semibold text-red-600">{error}</p>
+      )}
+      {msg && (
+        <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700">{msg}</p>
+      )}
+
+      <form
+        id="create"
+        onSubmit={createOrg}
+        className="scroll-mt-20 space-y-3 rounded-xl border bg-white p-5 shadow-sm"
+      >
+        <h2 className="font-bold text-slate-900">Onboard church</h2>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <label className="text-xs font-semibold uppercase text-slate-500">Name</label>
+            <input
+              required
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
+              placeholder="Hope Chapel"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-semibold uppercase text-slate-500">Slug</label>
+            <input
+              value={slug}
+              onChange={(e) => setSlug(e.target.value)}
+              className="mt-1 w-full rounded-lg border px-3 py-2 text-sm font-mono"
+              placeholder="hope-chapel"
+            />
+          </div>
+        </div>
+        <select
+          value={plan}
+          onChange={(e) => setPlan(e.target.value)}
+          className="rounded-lg border px-3 py-2 text-sm"
+        >
+          <option value="starter">starter</option>
+          <option value="growth">growth</option>
+          <option value="pro">pro</option>
+        </select>
+        <button
+          type="submit"
+          disabled={busy}
+          className="block rounded-lg bg-violet-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-violet-800 disabled:opacity-50"
+        >
+          {busy ? "Creating…" : "Create tenant"}
+        </button>
+      </form>
+
+      <section className="space-y-3">
+        <h2 className="font-bold text-slate-900">Tenants ({orgs.length})</h2>
+        <ul className="space-y-3">
+          {orgs.map((o) => (
+            <li key={o.id} className="rounded-xl border bg-white p-4 shadow-sm">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="font-bold text-slate-900">{o.name}</p>
+                  <p className="text-xs text-slate-500">
+                    <span className="font-mono">{o.slug}</span>
+                    {" · "}
+                    <span className={o.is_active ? "text-emerald-600 font-semibold" : "text-red-600 font-semibold"}>
+                      {o.is_active ? "active" : "inactive"}
+                    </span>
+                    {" · "}
+                    <span className="font-semibold">{o.plan}</span>
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => actAs(o.id)}
+                    className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white"
+                  >
+                    Work as this church
+                  </button>
+                  <select
+                    value={o.plan}
+                    onChange={(e) => setPlanFor(o.id, e.target.value)}
+                    className="rounded-lg border px-2 py-1 text-xs"
+                  >
+                    <option value="starter">starter</option>
+                    <option value="growth">growth</option>
+                    <option value="pro">pro</option>
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => toggleActive(o.id, o.is_active)}
+                    className="rounded-lg border px-3 py-1.5 text-xs font-semibold"
+                  >
+                    {o.is_active ? "Suspend" : "Activate"}
+                  </button>
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <p className="text-xs text-slate-400">
+        Next: isolate all church data by organization_id, then Stripe billing per tenant — same path as
+        qing-school.
+      </p>
     </div>
   );
 }
