@@ -43,7 +43,6 @@ export function Nav() {
       setIsLoggedIn(false);
       setUser(null);
     }
-    // Active church brand (Act-as, ?tenant=, or cookie)
     apiFetch<{ name?: string }>("/tenants/current")
       .then((org) => {
         if (org?.name) setChurchName(org.name);
@@ -72,7 +71,18 @@ export function Nav() {
   function signOut() {
     clearAuth();
     setMenuOpen(false);
-    router.push("/");
+    try {
+      localStorage.removeItem("active_tenant_id");
+      localStorage.removeItem("active_tenant_name");
+      localStorage.removeItem("public_tenant_slug");
+    } catch {
+      /* ignore */
+    }
+    if (typeof window !== "undefined") {
+      window.location.href = "/";
+    } else {
+      router.push("/");
+    }
   }
 
   const accountSection = (
