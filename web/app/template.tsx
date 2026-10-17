@@ -34,12 +34,11 @@ export default function PublicVisitorTemplate({
     setIsStaff(!!(u && (isStaffRole(u.role) || u.is_superuser)));
   }, [pathname]);
 
-  if (pathname.startsWith("/admin")) {
+  // Admin app + SaaS product marketing use their own chrome
+  if (pathname.startsWith("/admin") || pathname.startsWith("/platform")) {
     return <>{children}</>;
   }
 
-  // Contact form only on home — full form also lives at /contact
-  // Staff already manage via admin; still allow home contact for testing if needed
   const showContactBand = pathname === "/" && !isStaff;
 
   return (
@@ -56,7 +55,6 @@ export default function PublicVisitorTemplate({
       </main>
       <footer className="border-t border-slate-200 bg-white py-6">
         <div className="mx-auto flex max-w-6xl flex-col items-center gap-3 px-4 text-center text-sm text-slate-500">
-          {/* Public shortcuts only for guests/members — staff use admin sidebar */}
           {!isStaff && (
             <nav className="flex flex-wrap justify-center gap-x-4 gap-y-1" aria-label="Footer">
               {FOOTER_LINKS.map(({ href, label }) => {
