@@ -9,7 +9,7 @@ from app.db.base import Base
 
 
 class Organization(Base):
-    """Tenant / church account. Single-tenant installs still use one default row."""
+    """Tenant / church account."""
 
     __tablename__ = "organizations"
 
@@ -20,10 +20,14 @@ class Organization(Base):
     primary_color: Mapped[str] = mapped_column(String(20), default="#1d4ed8")
     logo_url: Mapped[str | None] = mapped_column(String(500))
     timezone: Mapped[str] = mapped_column(String(50), default="Africa/Kampala")
-    service_times: Mapped[str | None] = mapped_column(Text)  # human-readable e.g. Sundays 10:00 AM
+    service_times: Mapped[str | None] = mapped_column(Text)
     address: Mapped[str | None] = mapped_column(Text)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    plan: Mapped[str] = mapped_column(String(40), default="starter")  # starter, growth, pro
+    plan: Mapped[str] = mapped_column(String(40), default="starter")
+    # Billing (Stripe)
+    subscription_status: Mapped[str] = mapped_column(String(40), default="trial")
+    stripe_customer_id: Mapped[str | None] = mapped_column(String(120))
+    stripe_subscription_id: Mapped[str | None] = mapped_column(String(120))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow

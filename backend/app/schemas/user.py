@@ -35,6 +35,7 @@ class UserOut(UserBase):
     id: int
     is_active: bool
     is_superuser: bool
+    organization_id: int | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -49,7 +50,6 @@ class Token(BaseModel):
 
 class TokenPayload(BaseModel):
     sub: str | None = None
-    type: str | None = None
 
 
 class LoginRequest(BaseModel):
