@@ -1,10 +1,11 @@
+from app.services.tenant import resolve_org_id
 from datetime import datetime
 
 from fastapi import APIRouter, HTTPException, status
-from pydantic import BaseModel, Field, HttpUrl
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 
-from app.api.deps import DbSession, LeaderUser
+from app.api.deps import DbSession, LeaderUser, OptionalUser
 from app.models.gallery import GalleryPhoto
 
 router = APIRouter(prefix="/gallery", tags=["gallery"])
@@ -46,8 +47,10 @@ async def list_photos(
     published_only: bool = True,
     album: str | None = None,
     limit: int = 100,
+    current_user: OptionalUser = None,
 ):
-    q = select(GalleryPhoto).order_by(
+    oid = await resolve_org_id(db, current_user)
+    q = select(GalleryPhoto).where(GalleryPhoto.organization_id == oid).order_by(
         GalleryPhoto.sort_order.asc(), GalleryPhoto.created_at.desc()
     )
     if published_only:
@@ -59,8 +62,14 @@ async def list_photos(
 
 
 @router.get("/albums")
-async def list_albums(db: DbSession, published_only: bool = True):
-    q = select(GalleryPhoto.album).distinct().order_by(GalleryPhoto.album)
+async def list_albums(db: DbSession, published_only: bool = True, current_user: OptionalUser = None):
+    oid = await resolve_org_id(db, current_user)
+    q = (
+        select(GalleryPhoto.album)
+        .where(GalleryPhoto.organization_id == oid)
+        .distinct()
+        .order_by(GalleryPhoto.album)
+    )
     if published_only:
         q = q.where(GalleryPhoto.is_published == True)  # noqa: E712
     result = await db.execute(q)
@@ -68,7 +77,7 @@ async def list_albums(db: DbSession, published_only: bool = True):
 
 
 @router.post("/photos", response_model=PhotoOut, status_code=status.HTTP_201_CREATED)
-async def create_photo(payload: PhotoCreate, db: DbSession, _: LeaderUser):
+async def create_photo(payload: PhotoCreate, db: DbSession, current_user: LeaderUser):
     url = payload.image_url.strip()
     if not url.startswith("http://") and not url.startswith("https://"):
         raise HTTPException(status_code=400, detail="image_url must be an http(s) link")
@@ -79,6 +88,7 @@ async def create_photo(payload: PhotoCreate, db: DbSession, _: LeaderUser):
         album=(payload.album or "General").strip() or "General",
         sort_order=payload.sort_order,
         is_published=payload.is_published,
+        organization_id=await resolve_org_id(db, current_user),
     )
     db.add(photo)
     await db.flush()
@@ -88,9 +98,14 @@ async def create_photo(payload: PhotoCreate, db: DbSession, _: LeaderUser):
 
 @router.patch("/photos/{photo_id}", response_model=PhotoOut)
 async def update_photo(
-    photo_id: int, payload: PhotoUpdate, db: DbSession, _: LeaderUser
+    photo_id: int, payload: PhotoUpdate, db: DbSession, current_user: LeaderUser
 ):
-    result = await db.execute(select(GalleryPhoto).where(GalleryPhoto.id == photo_id))
+    oid = await resolve_org_id(db, current_user)
+    result = await db.execute(
+        select(GalleryPhoto).where(
+            GalleryPhoto.id == photo_id, GalleryPhoto.organization_id == oid
+        )
+    )
     photo = result.scalar_one_or_none()
     if not photo:
         raise HTTPException(status_code=404, detail="Photo not found")
@@ -108,8 +123,13 @@ async def update_photo(
 
 
 @router.delete("/photos/{photo_id}")
-async def delete_photo(photo_id: int, db: DbSession, _: LeaderUser):
-    result = await db.execute(select(GalleryPhoto).where(GalleryPhoto.id == photo_id))
+async def delete_photo(photo_id: int, db: DbSession, current_user: LeaderUser):
+    oid = await resolve_org_id(db, current_user)
+    result = await db.execute(
+        select(GalleryPhoto).where(
+            GalleryPhoto.id == photo_id, GalleryPhoto.organization_id == oid
+        )
+    )
     photo = result.scalar_one_or_none()
     if not photo:
         raise HTTPException(status_code=404, detail="Photo not found")
