@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { apiFetch } from "@/lib/api";
 import { MediaThumb } from "@/components/MediaThumb";
+import { IconFilm } from "@/components/AdminIcons";
 
 type MediaItem = {
   id: number;
@@ -156,7 +157,7 @@ export default function AdminMediaPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold">Media / Playlists</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Media / Playlists</h1>
           <p className="mt-1 text-sm text-slate-500">
             Real titles required to publish. YouTube → auto cover. Optional thumbnail URL.
           </p>
@@ -190,7 +191,7 @@ export default function AdminMediaPage() {
               resetForm();
               setShowForm((v) => !v);
             }}
-            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
+            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
           >
             {showForm && !editId ? "Cancel" : "Add media"}
           </button>
@@ -271,66 +272,90 @@ export default function AdminMediaPage() {
         </form>
       )}
 
-      {loading && <p className="text-slate-500">Loading…</p>}
-      <ul className="grid gap-3 sm:grid-cols-2">
-        {items.map((item) => {
-          const status = playableStatus(item);
-          return (
-            <li key={item.id} className="overflow-hidden rounded-xl border bg-white shadow-sm">
-              <MediaThumb
-                title={item.title}
-                thumbnail_url={item.thumbnail_url}
-                video_url={item.video_url}
-                media_type={item.media_type}
-                hasAudio={!!item.audio_url}
-              />
-              <div className="flex flex-wrap items-start justify-between gap-2 p-3">
-                <div className="min-w-0">
-                  <p className="font-medium text-slate-900">{item.title}</p>
-                  <p className="text-xs text-slate-500">
-                    {item.media_type}
-                    {item.speaker ? ` · ${item.speaker}` : ""}
-                    {item.is_published ? (
-                      <span className="font-semibold text-emerald-600"> · published</span>
-                    ) : (
-                      <span className="text-slate-400"> · draft</span>
-                    )}
-                  </p>
-                  <p className="mt-1">
-                    <span
-                      className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${
-                        status.ok
-                          ? "bg-emerald-50 text-emerald-700"
-                          : "bg-amber-50 text-amber-800"
-                      }`}
+      {loading && <p className="text-sm text-slate-500">Loading media…</p>}
+
+      {!loading && items.length === 0 && !showForm && (
+        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 px-6 py-12 text-center">
+          <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-violet-600 shadow-sm ring-1 ring-slate-100">
+            <IconFilm className="h-6 w-6" />
+          </div>
+          <p className="text-base font-bold text-slate-800">No media yet</p>
+          <p className="mt-1.5 max-w-sm text-sm leading-relaxed text-slate-500">
+            Add a sermon with a YouTube URL — covers generate automatically. Audio and text messages
+            work too.
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              setEditId(null);
+              resetForm();
+              setShowForm(true);
+            }}
+            className="mt-5 inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-slate-800"
+          >
+            Add first item
+          </button>
+        </div>
+      )}
+
+      {!loading && items.length > 0 && (
+        <ul className="grid gap-3 sm:grid-cols-2">
+          {items.map((item) => {
+            const status = playableStatus(item);
+            return (
+              <li key={item.id} className="overflow-hidden rounded-xl border bg-white shadow-sm">
+                <MediaThumb
+                  title={item.title}
+                  thumbnail_url={item.thumbnail_url}
+                  video_url={item.video_url}
+                  media_type={item.media_type}
+                  hasAudio={!!item.audio_url}
+                />
+                <div className="flex flex-wrap items-start justify-between gap-2 p-3">
+                  <div className="min-w-0">
+                    <p className="font-medium text-slate-900">{item.title}</p>
+                    <p className="text-xs text-slate-500">
+                      {item.media_type}
+                      {item.speaker ? ` · ${item.speaker}` : ""}
+                      {item.is_published ? (
+                        <span className="font-semibold text-emerald-600"> · published</span>
+                      ) : (
+                        <span className="text-slate-400"> · draft</span>
+                      )}
+                    </p>
+                    <p className="mt-1">
+                      <span
+                        className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${
+                          status.ok
+                            ? "bg-emerald-50 text-emerald-700"
+                            : "bg-amber-50 text-amber-800"
+                        }`}
+                      >
+                        {status.label}
+                      </span>
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Link href="/sermons" target="_blank" className="rounded border px-2 py-1 text-xs font-semibold">
+                      View
+                    </Link>
+                    <button type="button" onClick={() => openEdit(item)} className="rounded border px-2 py-1 text-xs font-semibold">
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => remove(item.id)}
+                      className="rounded border border-red-200 px-2 py-1 text-xs font-semibold text-red-600"
                     >
-                      {status.label}
-                    </span>
-                  </p>
+                      Delete
+                    </button>
+                  </div>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  <Link href="/sermons" target="_blank" className="rounded border px-2 py-1 text-xs font-semibold">
-                    View
-                  </Link>
-                  <button type="button" onClick={() => openEdit(item)} className="rounded border px-2 py-1 text-xs font-semibold">
-                    Edit
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => remove(item.id)}
-                    className="rounded border border-red-200 px-2 py-1 text-xs font-semibold text-red-600"
-                  >
-                    Delete
-                  </button>
-                </div>
-              </div>
-            </li>
-          );
-        })}
-        {!loading && items.length === 0 && (
-          <li className="col-span-full px-4 py-8 text-center text-sm text-slate-500">No media yet.</li>
-        )}
-      </ul>
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </div>
   );
 }
