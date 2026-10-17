@@ -46,7 +46,7 @@ async def list_events(
         q = q.where(Event.is_public == True)  # noqa: E712
     try:
         oid = await resolve_org_id(db, current_user)
-        q = q.where((Event.organization_id == oid) | (Event.organization_id.is_(None)))
+        q = q.where(Event.organization_id == oid)
     except Exception:
         pass
     result = await db.execute(q.order_by(Event.start_at.desc()).limit(limit))
@@ -94,7 +94,6 @@ async def rsvp_event(
     db: DbSession,
     current_user: OptionalUser = None,
 ):
-    """Public one-tap RSVP — works logged-in or as guest (name + email)."""
     result = await db.execute(select(Event).where(Event.id == event_id))
     event = result.scalar_one_or_none()
     if not event:
