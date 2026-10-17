@@ -9,9 +9,9 @@ type Org = {
   name: string;
   slug: string;
   plan: string;
+  subscription_status?: string | null;
   is_active: boolean;
-  service_times: string | null;
-  address: string | null;
+  tagline?: string | null;
 };
 
 function Kpi({
@@ -24,20 +24,21 @@ function Kpi({
   tone: "violet" | "green" | "amber" | "slate";
 }) {
   const tones = {
-    violet: "from-violet-50 to-white border-violet-200 text-violet-900",
-    green: "from-emerald-50 to-white border-emerald-200 text-emerald-900",
-    amber: "from-amber-50 to-white border-amber-200 text-amber-900",
-    slate: "from-slate-50 to-white border-slate-200 text-slate-900",
+    violet: "from-violet-500 to-indigo-600",
+    green: "from-emerald-500 to-teal-600",
+    amber: "from-amber-500 to-orange-600",
+    slate: "from-slate-600 to-slate-800",
   };
   return (
-    <div className={`rounded-xl border bg-gradient-to-br px-4 py-3 shadow-sm ${tones[tone]}`}>
-      <p className="text-[10px] font-semibold uppercase tracking-wide opacity-60">{label}</p>
-      <p className="mt-1 text-2xl font-bold tabular-nums">{value}</p>
+    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{label}</p>
+      <p className="mt-1 text-2xl font-extrabold tabular-nums text-slate-900">{value}</p>
+      <div className={`mt-2 h-1 w-10 rounded-full bg-gradient-to-r ${tones[tone]}`} />
     </div>
   );
 }
 
-export default function PlatformDashboardPage() {
+export default function PlatformPage() {
   const [orgs, setOrgs] = useState<Org[]>([]);
   const [error, setError] = useState("");
   const [msg, setMsg] = useState("");
@@ -58,34 +59,62 @@ export default function PlatformDashboardPage() {
 
   async function load() {
     try {
-      setError("");
       const list = await apiFetch<Org[]>("/tenants");
       setOrgs(Array.isArray(list) ? list : []);
+      setError("");
     } catch (e: any) {
       setError(e.message || "Could not load tenants");
     }
   }
 
-  async function createOrg(e: React.FormEvent) {
+  async function createTenant(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
-    setMsg("");
     setError("");
+    setMsg("");
     try {
       await apiFetch("/tenants", {
         method: "POST",
         body: JSON.stringify({
-          name: name.trim(),
-          slug: slug.trim() || undefined,
+          name,
+          slug: slug || undefined,
           plan,
         }),
       });
       setName("");
       setSlug("");
-      setMsg("Tenant created");
+      setMsg("Church tenant created.");
       await load();
     } catch (err: any) {
       setError(err.message || "Create failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function startBilling(id: number, planName: string = "growth") {
+    setMsg("");
+    setError("");
+    setBusy(true);
+    try {
+      const res = await apiFetch<{
+        url?: string | null;
+        demo?: boolean;
+        message?: string;
+      }>(`/tenants/${id}/billing/checkout?plan=${encodeURIComponent(planName)}`, {
+        method: "POST",
+      });
+      if (res.url) {
+        window.location.href = res.url;
+        return;
+      }
+      setMsg(
+        res.message ||
+          "Plan activated (demo mode — add STRIPE_SECRET_KEY on Render for live checkout)."
+      );
+      await load();
+    } catch (err: any) {
+      setError(err.message || "Billing failed");
     } finally {
       setBusy(false);
     }
@@ -138,9 +167,11 @@ export default function PlatformDashboardPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-bold text-slate-900">Platform · Churches & plans</h1>
+        <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">
+          Platform · Churches & plans
+        </h1>
         <p className="mt-1 text-sm text-slate-500">
-          SaaS control plane — all tenants (same idea as your school platform console).
+          SaaS control plane — tenants, Act-as, and billing (demo or Stripe).
         </p>
       </div>
 
@@ -157,71 +188,42 @@ export default function PlatformDashboardPage() {
           <span className="ml-2 text-xs text-sky-700">
             Use Church admin tools for that tenant.
           </span>
+          <Link href="/admin" className="ml-3 font-semibold text-sky-800 underline">
+            Open admin →
+          </Link>
         </div>
       )}
 
-      <div className="grid gap-3 sm:grid-cols-3">
-        <Link
-          href="#create"
-          className="rounded-xl border border-violet-200 bg-violet-50 p-4 shadow-sm hover:border-violet-300"
-        >
-          <p className="font-bold text-violet-900">Create tenant</p>
-          <p className="mt-1 text-xs text-violet-700">Provision a new church</p>
-        </Link>
-        <Link
-          href="/admin"
-          className="rounded-xl border bg-white p-4 shadow-sm hover:border-slate-300"
-        >
-          <p className="font-bold text-slate-900">Church admin</p>
-          <p className="mt-1 text-xs text-slate-500">Ops for active / default tenant</p>
-        </Link>
-        <Link
-          href="/admin/settings"
-          className="rounded-xl border bg-white p-4 shadow-sm hover:border-slate-300"
-        >
-          <p className="font-bold text-slate-900">Church settings</p>
-          <p className="mt-1 text-xs text-slate-500">Brand · service times</p>
-        </Link>
-      </div>
-
       {error && (
-        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-semibold text-red-600">{error}</p>
+        <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-800">{error}</p>
       )}
       {msg && (
-        <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700">{msg}</p>
+        <p className="rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-900">{msg}</p>
       )}
 
       <form
         id="create"
-        onSubmit={createOrg}
-        className="scroll-mt-20 space-y-3 rounded-xl border bg-white p-5 shadow-sm"
+        onSubmit={createTenant}
+        className="space-y-3 rounded-2xl border border-violet-100 bg-violet-50/50 p-5 shadow-sm"
       >
-        <h2 className="font-bold text-slate-900">Onboard church</h2>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div>
-            <label className="text-xs font-semibold uppercase text-slate-500">Name</label>
-            <input
-              required
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
-              placeholder="Hope Chapel"
-            />
-          </div>
-          <div>
-            <label className="text-xs font-semibold uppercase text-slate-500">Slug</label>
-            <input
-              value={slug}
-              onChange={(e) => setSlug(e.target.value)}
-              className="mt-1 w-full rounded-lg border px-3 py-2 text-sm font-mono"
-              placeholder="hope-chapel"
-            />
-          </div>
-        </div>
+        <h2 className="font-bold text-violet-950">Create church tenant</h2>
+        <input
+          className="w-full rounded-xl border border-violet-200 bg-white px-3 py-2.5 text-sm"
+          placeholder="Church name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          required
+        />
+        <input
+          className="w-full rounded-xl border border-violet-200 bg-white px-3 py-2.5 text-sm"
+          placeholder="slug (optional)"
+          value={slug}
+          onChange={(e) => setSlug(e.target.value)}
+        />
         <select
           value={plan}
           onChange={(e) => setPlan(e.target.value)}
-          className="rounded-lg border px-3 py-2 text-sm"
+          className="w-full rounded-xl border border-violet-200 bg-white px-3 py-2.5 text-sm"
         >
           <option value="starter">starter</option>
           <option value="growth">growth</option>
@@ -230,28 +232,42 @@ export default function PlatformDashboardPage() {
         <button
           type="submit"
           disabled={busy}
-          className="block rounded-lg bg-violet-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-violet-800 disabled:opacity-50"
+          className="w-full rounded-xl bg-violet-700 py-2.5 text-sm font-bold text-white hover:bg-violet-800 disabled:opacity-60"
         >
           {busy ? "Creating…" : "Create tenant"}
         </button>
       </form>
 
-      <section className="space-y-3">
-        <h2 className="font-bold text-slate-900">Tenants ({orgs.length})</h2>
+      <div>
+        <h2 className="mb-3 font-bold text-slate-900">Tenants ({orgs.length})</h2>
         <ul className="space-y-3">
           {orgs.map((o) => (
-            <li key={o.id} className="rounded-xl border bg-white p-4 shadow-sm">
+            <li key={o.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <p className="font-bold text-slate-900">{o.name}</p>
                   <p className="text-xs text-slate-500">
                     <span className="font-mono">{o.slug}</span>
                     {" · "}
-                    <span className={o.is_active ? "text-emerald-600 font-semibold" : "text-red-600 font-semibold"}>
+                    <span
+                      className={
+                        o.is_active
+                          ? "font-semibold text-emerald-600"
+                          : "font-semibold text-red-600"
+                      }
+                    >
                       {o.is_active ? "active" : "inactive"}
                     </span>
                     {" · "}
                     <span className="font-semibold">{o.plan}</span>
+                    {o.subscription_status ? (
+                      <>
+                        {" · "}
+                        <span className="font-semibold text-violet-700">
+                          {o.subscription_status}
+                        </span>
+                      </>
+                    ) : null}
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -261,6 +277,14 @@ export default function PlatformDashboardPage() {
                     className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white"
                   >
                     Work as this church
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => startBilling(o.id, o.plan || "growth")}
+                    className="rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-violet-700 disabled:opacity-60"
+                  >
+                    Billing / plan
                   </button>
                   <select
                     value={o.plan}
@@ -274,20 +298,20 @@ export default function PlatformDashboardPage() {
                   <button
                     type="button"
                     onClick={() => toggleActive(o.id, o.is_active)}
-                    className="rounded-lg border px-3 py-1.5 text-xs font-semibold"
+                    className="rounded-lg border px-3 py-1.5 text-xs font-semibold text-slate-700"
                   >
-                    {o.is_active ? "Suspend" : "Activate"}
+                    {o.is_active ? "Deactivate" : "Activate"}
                   </button>
                 </div>
               </div>
             </li>
           ))}
         </ul>
-      </section>
+      </div>
 
       <p className="text-xs text-slate-400">
-        Next: isolate all church data by organization_id, then Stripe billing per tenant — same path as
-        qing-school.
+        Billing uses demo mode until <code className="rounded bg-slate-100 px-1">STRIPE_SECRET_KEY</code>{" "}
+        is set on Render. Then Checkout opens for real subscriptions.
       </p>
     </div>
   );
