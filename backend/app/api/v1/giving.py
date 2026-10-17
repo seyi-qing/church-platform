@@ -2,6 +2,7 @@ import stripe
 from fastapi import APIRouter, HTTPException, Request, status
 from sqlalchemy import select
 
+from app.services.tenant import resolve_org_id
 from app.api.deps import CurrentUser, OptionalUser, DbSession, AdminUser
 from app.core.config import get_settings
 from app.models.giving import Donation, RecurringDonation
@@ -26,6 +27,7 @@ async def create_donation_intent(
 ):
     """One-time gift. If logged in, ties donation to the user account."""
     if not settings.STRIPE_SECRET_KEY:
+        oid = await resolve_org_id(db, current_user)
         donation = Donation(
             user_id=current_user.id if current_user else None,
             amount_cents=payload.amount_cents,
@@ -37,6 +39,7 @@ async def create_donation_intent(
             or (current_user.email if current_user else None),
             donor_name=payload.donor_name
             or (current_user.full_name if current_user else None),
+            organization_id=oid,
         )
         db.add(donation)
         await db.flush()
@@ -61,6 +64,7 @@ async def create_donation_intent(
     except stripe.error.StripeError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
+    oid = await resolve_org_id(db, current_user)
     donation = Donation(
         user_id=current_user.id if current_user else None,
         amount_cents=payload.amount_cents,
@@ -72,6 +76,7 @@ async def create_donation_intent(
         or (current_user.email if current_user else None),
         donor_name=payload.donor_name
         or (current_user.full_name if current_user else None),
+        organization_id=oid,
     )
     db.add(donation)
     await db.flush()
@@ -93,10 +98,24 @@ async def my_donations(db: DbSession, current_user: CurrentUser, limit: int = 50
 
 
 @router.get("/history", response_model=list[DonationOut])
-@router.get("/admin/all", response_model=list[DonationOut])
-async def donation_history(db: DbSession, _: AdminUser, limit: int = 50):
+async def my_donation_history(db: DbSession, current_user: CurrentUser, limit: int = 50):
     result = await db.execute(
-        select(Donation).order_by(Donation.created_at.desc()).limit(limit)
+        select(Donation)
+        .where(Donation.user_id == current_user.id)
+        .order_by(Donation.created_at.desc())
+        .limit(limit)
+    )
+    return result.scalars().all()
+
+
+@router.get("/admin/all", response_model=list[DonationOut])
+async def admin_all_donations(db: DbSession, current_user: AdminUser, limit: int = 50):
+    oid = await resolve_org_id(db, current_user)
+    result = await db.execute(
+        select(Donation)
+        .where(Donation.organization_id == oid)
+        .order_by(Donation.created_at.desc())
+        .limit(limit)
     )
     return result.scalars().all()
 
@@ -189,7 +208,7 @@ async def create_recurring_checkout(
     payload: RecurringDonationCreate, db: DbSession, current_user: CurrentUser
 ):
     if not settings.STRIPE_SECRET_KEY:
-        # Demo: record active recurring without Stripe
+        oid = await resolve_org_id(db, current_user)
         rec = RecurringDonation(
             user_id=current_user.id,
             amount_cents=payload.amount_cents,
@@ -197,6 +216,7 @@ async def create_recurring_checkout(
             interval=payload.interval if payload.interval in ("week", "month", "year") else "month",
             status="active",
             stripe_subscription_id=f"demo_sub_{current_user.id}",
+            organization_id=oid,
         )
         db.add(rec)
         await db.flush()
@@ -219,7 +239,6 @@ async def create_recurring_checkout(
             product_data={"name": f"Recurring gift – {payload.fund}"},
         )
         origins = settings.BACKEND_CORS_ORIGINS or ["http://localhost:3000"]
-        # Prefer Vercel app origin if present
         origin = next(
             (o for o in origins if "vercel" in o),
             origins[0],
@@ -235,12 +254,14 @@ async def create_recurring_checkout(
     except stripe.error.StripeError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
+    oid = await resolve_org_id(db, current_user)
     rec = RecurringDonation(
         user_id=current_user.id,
         amount_cents=payload.amount_cents,
         fund=payload.fund,
         interval=interval,
         status="pending",
+        organization_id=oid,
     )
     db.add(rec)
     await db.flush()
