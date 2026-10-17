@@ -48,6 +48,33 @@ type GalleryPhoto = {
   caption: string | null;
 };
 
+const CONNECT = [
+  {
+    title: "Worship with us",
+    body: "Join in person this Sunday. Families, students, and first-time guests are welcome.",
+    href: "/contact",
+    cta: "Plan a visit",
+  },
+  {
+    title: "Watch online",
+    body: "Stream the service live or catch recent messages whenever you can.",
+    href: "/live",
+    cta: "Watch live",
+  },
+  {
+    title: "Find community",
+    body: "Small groups and teams help you grow in faith with others.",
+    href: "/events",
+    cta: "See events",
+  },
+  {
+    title: "Give generously",
+    body: "Support the mission of the church through tithes and offerings.",
+    href: "/give",
+    cta: "Give now",
+  },
+] as const;
+
 export default function HomePage() {
   const [sermons, setSermons] = useState<MediaItem[]>([]);
   const [events, setEvents] = useState<EventItem[]>([]);
@@ -108,9 +135,10 @@ export default function HomePage() {
 
   const pinned = announcements.find((a) => a.pinned);
   const rest = announcements.filter((a) => !a.pinned);
+  const featured = sermons[0];
 
   return (
-    <div className="space-y-10">
+    <div className="space-y-12">
       {live && !dismissedPin && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
           <div className="flex items-center gap-2">
@@ -142,56 +170,155 @@ export default function HomePage() {
         </div>
       )}
 
-      <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-brand-700 via-blue-800 to-slate-900 px-6 py-14 text-center text-white shadow-lg sm:px-10 sm:py-16">
-        <div className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-white/5" />
-        <div className="pointer-events-none absolute -bottom-20 -left-10 h-56 w-56 rounded-full bg-blue-400/10" />
-        <p className="relative text-[11px] font-bold uppercase tracking-[0.18em] text-blue-200">
-          Welcome home
-        </p>
-        <h1 className="relative mt-3 text-3xl font-extrabold tracking-tight sm:text-4xl lg:text-5xl">
-          {BRAND.name}
-        </h1>
-        <p className="relative mx-auto mt-4 max-w-md text-base text-blue-100 sm:text-lg">
-          A community following Jesus together
-        </p>
-        <p className="relative mx-auto mt-2 max-w-lg text-sm text-blue-100/85">
-          Join us this Sunday in person or online. Grow in faith, serve together, and find community.
-        </p>
-        <div className="relative mt-9 flex flex-wrap items-center justify-center gap-3">
-          <Link
-            href="/live"
-            className="rounded-xl bg-white px-6 py-3 text-sm font-bold text-brand-800 shadow-md hover:bg-blue-50"
-          >
-            Watch Live
-          </Link>
-          <Link
-            href="/sermons"
-            className="rounded-xl bg-white/15 px-5 py-3 text-sm font-semibold text-white ring-1 ring-white/30 hover:bg-white/25"
-          >
-            Sermons
-          </Link>
-          <Link
-            href="/give"
-            className="rounded-xl bg-white/15 px-5 py-3 text-sm font-semibold text-white ring-1 ring-white/30 hover:bg-white/25"
-          >
-            Give
-          </Link>
-          <Link
-            href="/events"
-            className="rounded-xl bg-white/15 px-5 py-3 text-sm font-semibold text-white ring-1 ring-white/30 hover:bg-white/25"
-          >
-            Events
-          </Link>
+      {/* Hero — church identity, not product demo */}
+      <section className="relative overflow-hidden rounded-3xl bg-slate-900 text-white shadow-xl">
+        <div className="absolute inset-0 bg-gradient-to-br from-brand-700/90 via-blue-900/95 to-slate-950" />
+        <div className="pointer-events-none absolute -right-20 top-0 h-72 w-72 rounded-full bg-blue-400/20 blur-3xl" />
+        <div className="relative px-6 py-16 sm:px-12 sm:py-20 lg:py-24">
+          <p className="text-center text-[11px] font-bold uppercase tracking-[0.2em] text-blue-200">
+            {BRAND.locationLabel}
+          </p>
+          <h1 className="mt-3 text-center text-4xl font-extrabold tracking-tight sm:text-5xl lg:text-6xl">
+            {BRAND.name}
+          </h1>
+          <p className="mx-auto mt-4 max-w-xl text-center text-lg text-blue-100/95 sm:text-xl">
+            {BRAND.tagline}
+          </p>
+          <p className="mx-auto mt-3 max-w-md text-center text-sm text-blue-100/80">
+            {BRAND.serviceTimes} · {BRAND.serviceNote}
+          </p>
+          <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
+            <Link
+              href="/live"
+              className="rounded-full bg-white px-7 py-3.5 text-sm font-bold text-brand-800 shadow-lg hover:bg-blue-50"
+            >
+              Watch this Sunday
+            </Link>
+            <Link
+              href="/contact"
+              className="rounded-full border border-white/35 bg-white/10 px-7 py-3.5 text-sm font-semibold text-white backdrop-blur hover:bg-white/20"
+            >
+              I'm new here
+            </Link>
+            <Link
+              href="/give"
+              className="rounded-full px-5 py-3.5 text-sm font-semibold text-blue-100 underline-offset-4 hover:text-white hover:underline"
+            >
+              Give
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* Ways to connect — Elevation-style pathways */}
+      <section>
+        <div className="mb-6 text-center">
+          <h2 className="text-2xl font-bold text-slate-900 sm:text-3xl">Find the right place for you</h2>
+          <p className="mt-2 text-sm text-slate-500">
+            In person, online, or in community — there is room for you here.
+          </p>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          {CONNECT.map((c) => (
+            <div
+              key={c.title}
+              className="flex flex-col rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition hover:border-blue-200 hover:shadow-md"
+            >
+              <h3 className="text-lg font-bold text-slate-900">{c.title}</h3>
+              <p className="mt-2 flex-1 text-sm leading-relaxed text-slate-600">{c.body}</p>
+              <Link
+                href={c.href}
+                className="mt-4 text-sm font-bold text-brand-700 hover:underline"
+              >
+                {c.cta} →
+              </Link>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* New here band */}
+      <section className="rounded-2xl border border-blue-100 bg-blue-50/80 px-6 py-8 text-center sm:px-10">
+        <h2 className="text-xl font-bold text-slate-900">{BRAND.newHereTitle}</h2>
+        <p className="mx-auto mt-2 max-w-lg text-sm text-slate-600">{BRAND.newHereBody}</p>
+        <div className="mt-5 flex flex-wrap justify-center gap-3">
           <Link
             href="/contact"
-            className="rounded-xl px-5 py-3 text-sm font-semibold text-blue-100 underline-offset-4 hover:text-white hover:underline"
+            className="rounded-xl bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-700"
           >
             Plan a visit
+          </Link>
+          <Link
+            href="/login"
+            className="rounded-xl border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-800"
+          >
+            Member sign in
           </Link>
         </div>
       </section>
 
       {photos.length > 0 && <GalleryStrip photos={photos} brandName={BRAND.name} />}
+
+      {/* Featured message */}
+      <section>
+        <div className="mb-4 flex items-end justify-between gap-4">
+          <div>
+            <h2 className="text-2xl font-bold text-slate-900">Latest message</h2>
+            <p className="mt-1 text-sm text-slate-500">Watch or listen anytime</p>
+          </div>
+          <Link href="/sermons" className="text-sm font-semibold text-brand-600 hover:underline">
+            All sermons
+          </Link>
+        </div>
+        {!featured ? (
+          <p className="rounded-xl border border-dashed bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
+            No sermons published yet.
+          </p>
+        ) : (
+          <div className="grid gap-4 lg:grid-cols-5">
+            <Link
+              href="/sermons"
+              className="overflow-hidden rounded-2xl border bg-white shadow-sm lg:col-span-3"
+            >
+              <MediaThumb
+                title={featured.title}
+                media_type={featured.media_type}
+                video_url={featured.video_url}
+                thumbnail_url={featured.thumbnail_url}
+              />
+              <div className="p-4">
+                <p className="text-xs font-bold uppercase tracking-wide text-brand-600">Featured</p>
+                <h3 className="mt-1 text-xl font-bold text-slate-900">{featured.title}</h3>
+                {featured.speaker && (
+                  <p className="mt-1 text-sm text-slate-500">{featured.speaker}</p>
+                )}
+              </div>
+            </Link>
+            <div className="space-y-3 lg:col-span-2">
+              {sermons.slice(1, 4).map((m) => (
+                <Link
+                  key={m.id}
+                  href="/sermons"
+                  className="flex gap-3 rounded-xl border bg-white p-3 shadow-sm hover:border-blue-200"
+                >
+                  <div className="w-24 shrink-0 overflow-hidden rounded-lg">
+                    <MediaThumb
+                      title={m.title}
+                      media_type={m.media_type}
+                      video_url={m.video_url}
+                      thumbnail_url={m.thumbnail_url}
+                    />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="truncate font-semibold text-slate-900">{m.title}</p>
+                    {m.speaker && <p className="text-xs text-slate-500">{m.speaker}</p>}
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
+      </section>
 
       {announcements.length > 0 && (
         <section>
@@ -224,44 +351,6 @@ export default function HomePage() {
           </ul>
         </section>
       )}
-
-      <section>
-        <div className="mb-4 flex items-end justify-between gap-4">
-          <div>
-            <h2 className="text-2xl font-bold text-slate-900">Latest messages</h2>
-            <p className="mt-1 text-sm text-slate-500">Sermons, video, and audio</p>
-          </div>
-          <Link href="/sermons" className="text-sm font-semibold text-brand-600 hover:underline">
-            View all
-          </Link>
-        </div>
-        {sermons.length === 0 ? (
-          <p className="rounded-xl border border-dashed bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
-            No sermons published yet.
-          </p>
-        ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {sermons.map((m) => (
-              <Link
-                key={m.id}
-                href="/sermons"
-                className="overflow-hidden rounded-xl border bg-white shadow-sm transition hover:shadow-md"
-              >
-                <MediaThumb
-                  title={m.title}
-                  media_type={m.media_type}
-                  video_url={m.video_url}
-                  thumbnail_url={m.thumbnail_url}
-                />
-                <div className="p-3">
-                  <p className="font-semibold text-slate-900">{m.title}</p>
-                  {m.speaker && <p className="text-xs text-slate-500">{m.speaker}</p>}
-                </div>
-              </Link>
-            ))}
-          </div>
-        )}
-      </section>
 
       <section>
         <div className="mb-4 flex items-end justify-between gap-4">

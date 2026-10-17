@@ -18,6 +18,7 @@ from app.api.v1 import (
     gallery,
     inquiries,
     community,
+    tenants,
 )
 
 api_router = APIRouter()
@@ -39,3 +40,4 @@ api_router.include_router(ops.router)
 api_router.include_router(gallery.router)
 api_router.include_router(inquiries.router)
 api_router.include_router(community.router)
+api_router.include_router(tenants.router)

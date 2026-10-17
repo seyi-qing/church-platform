@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { apiFetch, API_URL } from "@/lib/api";
+import { apiFetch } from "@/lib/api";
 import { setAuth, isStaffRole } from "@/lib/auth";
 
 type Mode = "login" | "register";
@@ -62,7 +62,7 @@ export default function MemberLoginPage() {
       if (isStaffRole(user?.role) || user?.is_superuser) {
         router.replace("/admin");
       } else {
-        router.replace("/profile");
+        router.replace("/dashboard");
       }
     } catch (err: any) {
       setError(friendlyAuthError(err.message));
@@ -78,85 +78,79 @@ export default function MemberLoginPage() {
           {mode === "login" ? "Member sign in" : "Create your account"}
         </h1>
         <p className="mt-1 text-sm text-slate-500">
-          For church members. Staff use{" "}
-          <Link href="/admin/login" className="text-blue-600 underline">
-            staff login
-          </Link>
-          .
+          {mode === "login"
+            ? "Access your dashboard, giving history, and church updates."
+            : "Join the Grace Church member community."}
         </p>
 
         <form onSubmit={onSubmit} className="mt-6 space-y-4">
           {mode === "register" && (
-            <label className="block text-sm">
-              <span className="font-medium text-slate-700">Full name</span>
+            <div>
+              <label className="text-xs font-semibold uppercase text-slate-500">Full name</label>
               <input
-                className="mt-1 w-full rounded-lg border px-3 py-2"
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
-                required
+                className="mt-1 w-full rounded-lg border px-3 py-2.5 text-sm"
+                autoComplete="name"
               />
-            </label>
-          )}
-          <label className="block text-sm">
-            <span className="font-medium text-slate-700">Email</span>
-            <input
-              type="email"
-              className="mt-1 w-full rounded-lg border px-3 py-2"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              autoComplete="email"
-            />
-          </label>
-          <label className="block text-sm">
-            <span className="font-medium text-slate-700">Password</span>
-            <input
-              type="password"
-              minLength={8}
-              className="mt-1 w-full rounded-lg border px-3 py-2"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              autoComplete={mode === "login" ? "current-password" : "new-password"}
-            />
-          </label>
-
-          {error && (
-            <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
-              <p>{error}</p>
-              <p className="mt-1 text-[11px] text-red-500/80">API: {API_URL}</p>
             </div>
           )}
-
+          <div>
+            <label className="text-xs font-semibold uppercase text-slate-500">Email</label>
+            <input
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="mt-1 w-full rounded-lg border px-3 py-2.5 text-sm"
+              autoComplete="email"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-semibold uppercase text-slate-500">Password</label>
+            <input
+              type="password"
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="mt-1 w-full rounded-lg border px-3 py-2.5 text-sm"
+              autoComplete={mode === "login" ? "current-password" : "new-password"}
+            />
+          </div>
+          {error && (
+            <p className="rounded-lg bg-red-50 px-3 py-2 text-sm font-semibold text-red-600">{error}</p>
+          )}
           <button
             type="submit"
             disabled={busy}
-            className="w-full rounded-lg bg-blue-600 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+            className="w-full rounded-xl bg-brand-600 py-3 text-sm font-bold text-white hover:bg-brand-700 disabled:opacity-50"
           >
             {busy ? "Please wait…" : mode === "login" ? "Sign in" : "Create account"}
           </button>
         </form>
 
-        <p className="mt-4 text-center text-sm text-slate-600">
+        <p className="mt-4 text-center text-sm text-slate-500">
           {mode === "login" ? (
             <>
               New here?{" "}
-              <button
-                type="button"
-                className="font-semibold text-blue-600"
-                onClick={() => setMode("register")}
-              >
-                Create an account
+              <button type="button" className="font-semibold text-brand-700" onClick={() => setMode("register")}>
+                Create account
               </button>
             </>
           ) : (
             <>
               Already have an account?{" "}
-              <button type="button" className="font-semibold text-blue-600" onClick={() => setMode("login")}>
+              <button type="button" className="font-semibold text-brand-700" onClick={() => setMode("login")}>
                 Sign in
               </button>
             </>
           )}
+        </p>
+        <p className="mt-3 text-center text-xs text-slate-400">
+          Staff?{" "}
+          <Link href="/admin/login" className="text-blue-600 underline">
+            Admin login
+          </Link>
         </p>
       </div>
     </div>

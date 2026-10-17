@@ -1,6 +1,6 @@
 """Tenant / organization API — multi-tenant foundation."""
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
@@ -65,7 +65,7 @@ async def ensure_default_org(db: DbSession) -> Organization:
 
 
 @router.get("/current", response_model=OrgOut)
-async def current_tenant(db: DbSession, _: OptionalUser = None):
+async def current_tenant(db: DbSession, _user: OptionalUser = None):
     """Public: brand + service info for the active church (single-tenant default)."""
     org = await ensure_default_org(db)
     return org
