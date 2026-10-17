@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { getAccessToken, clearAuth, getStoredUser } from "@/lib/auth";
+import { apiFetch } from "@/lib/api";
 
 type NavItem = { href: string; label: string; roles: string[]; superOnly?: boolean };
 
@@ -84,6 +85,7 @@ export default function AdminLayout({
   const [user, setUser] = useState<any>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [churchName, setChurchName] = useState("Church");
 
   useEffect(() => {
     if (pathname === "/admin/login") {
@@ -112,6 +114,24 @@ export default function AdminLayout({
     }
     setUser(u);
     setReady(true);
+    try {
+      const cached = localStorage.getItem("active_tenant_name");
+      if (cached) setChurchName(cached);
+    } catch {
+      /* ignore */
+    }
+    apiFetch<{ name?: string }>("/tenants/current")
+      .then((org) => {
+        if (org?.name) {
+          setChurchName(org.name);
+          try {
+            localStorage.setItem("active_tenant_name", org.name);
+          } catch {
+            /* ignore */
+          }
+        }
+      })
+      .catch(() => {});
   }, [pathname, router]);
 
   useEffect(() => {
@@ -131,6 +151,12 @@ export default function AdminLayout({
 
   function doLogout() {
     clearAuth();
+    try {
+      localStorage.removeItem("active_tenant_id");
+      localStorage.removeItem("active_tenant_name");
+    } catch {
+      /* ignore */
+    }
     router.push("/admin/login");
   }
 
@@ -138,11 +164,16 @@ export default function AdminLayout({
     return (
       <>
         <div className="border-b border-slate-800 p-4">
-          <div className="text-sm font-bold tracking-wide text-white">Grace Church</div>
+          <div className="text-sm font-bold tracking-wide text-white">{churchName}</div>
           <p className="mt-0.5 text-xs font-semibold uppercase tracking-wider text-blue-300">
             Admin · {user.role}
             {user.is_superuser ? " · platform" : ""}
           </p>
+          {churchName && churchName !== "Church" && (
+            <p className="mt-0.5 text-[10px] font-medium text-emerald-300">
+              Working as {churchName}
+            </p>
+          )}
         </div>
         <nav className="mt-2 flex-1 space-y-3 overflow-y-auto px-2 pb-4" aria-label="Admin">
           {NAV_GROUPS.map((group) => {
@@ -188,6 +219,15 @@ export default function AdminLayout({
           >
             View public site
           </Link>
+          {user.is_superuser && (
+            <Link
+              href="/platform"
+              onClick={onNavigate}
+              className="block w-full rounded-lg px-3 py-2.5 text-left text-sm font-medium text-violet-300 hover:bg-slate-800"
+            >
+              Platform console
+            </Link>
+          )}
           <button
             type="button"
             onClick={doLogout}
@@ -219,7 +259,7 @@ export default function AdminLayout({
             </svg>
           </button>
           <div className="min-w-0 flex-1">
-            <div className="text-sm font-bold">Grace Church</div>
+            <div className="text-sm font-bold">{churchName}</div>
             <div className="text-[10px] uppercase tracking-wider text-blue-300">
               Admin · {user.role}
               {user.is_superuser ? " · platform" : ""}
@@ -299,7 +339,7 @@ export default function AdminLayout({
               aria-label="Admin menu"
             >
               <div className="flex items-center justify-between border-b border-slate-800 p-4">
-                <span className="text-sm font-bold text-white">Grace Church</span>
+                <span className="text-sm font-bold text-white">{churchName}</span>
                 <button
                   type="button"
                   aria-label="Close menu"
