@@ -3,7 +3,8 @@ from datetime import datetime
 from fastapi import APIRouter, File, HTTPException, UploadFile, status
 from sqlalchemy import select
 
-from app.api.deps import LeaderUser, DbSession
+from app.api.deps import LeaderUser, DbSession, OptionalUser
+from app.services.tenant import resolve_org_id
 from app.models.media import MediaItem, Series
 from app.schemas.media import (
     MediaItemCreate,
@@ -16,16 +17,7 @@ from app.schemas.media import (
 router = APIRouter(prefix="/media", tags=["media"])
 
 WEAK_TITLES = {
-    "video",
-    "audio",
-    "message",
-    "sermon",
-    "text",
-    "test",
-    "untitled",
-    "new",
-    "media",
-    "just testing",
+    "video", "audio", "message", "sermon", "text", "test", "untitled", "new", "media", "just testing",
 }
 
 
@@ -61,32 +53,21 @@ def _require_playable(
     video = (video_url or "").strip()
     audio = (audio_url or "").strip()
     text = (description or "").strip()
-
     if mt == "video" and not video:
-        raise HTTPException(
-            status_code=400,
-            detail="Published video needs a Video URL (YouTube or public file link).",
-        )
+        raise HTTPException(status_code=400, detail="Published video needs a Video URL (YouTube or public file link).")
     if mt in ("audio", "podcast") and not audio:
-        raise HTTPException(
-            status_code=400,
-            detail="Published audio/podcast needs an Audio URL.",
-        )
+        raise HTTPException(status_code=400, detail="Published audio/podcast needs an Audio URL.")
     if mt == "text" and not text:
-        raise HTTPException(
-            status_code=400,
-            detail="Published text message needs a description/body.",
-        )
+        raise HTTPException(status_code=400, detail="Published text message needs a description/body.")
     if mt == "sermon" and not video and not audio and not text:
-        raise HTTPException(
-            status_code=400,
-            detail="Published sermon needs a video URL, audio URL, or text description.",
-        )
+        raise HTTPException(status_code=400, detail="Published sermon needs a video URL, audio URL, or text description.")
 
 
 @router.post("/series", response_model=SeriesOut, status_code=status.HTTP_201_CREATED)
-async def create_series(payload: SeriesCreate, db: DbSession, _: LeaderUser):
-    series = Series(**payload.model_dump())
+async def create_series(payload: SeriesCreate, db: DbSession, current_user: LeaderUser):
+    data = payload.model_dump()
+    data["organization_id"] = await resolve_org_id(db, current_user)
+    series = Series(**data)
     db.add(series)
     await db.flush()
     await db.refresh(series)
@@ -94,8 +75,14 @@ async def create_series(payload: SeriesCreate, db: DbSession, _: LeaderUser):
 
 
 @router.get("/series", response_model=list[SeriesOut])
-async def list_series(db: DbSession, published_only: bool = True):
+async def list_series(
+    db: DbSession,
+    published_only: bool = True,
+    current_user: OptionalUser = None,
+):
     query = select(Series)
+    oid = await resolve_org_id(db, current_user)
+    query = query.where(Series.organization_id == oid)
     if published_only:
         query = query.where(Series.is_published == True)  # noqa: E712
     result = await db.execute(query.order_by(Series.created_at.desc()))
@@ -103,7 +90,7 @@ async def list_series(db: DbSession, published_only: bool = True):
 
 
 @router.post("/items", response_model=MediaItemOut, status_code=status.HTTP_201_CREATED)
-async def create_media_item(payload: MediaItemCreate, db: DbSession, _: LeaderUser):
+async def create_media_item(payload: MediaItemCreate, db: DbSession, current_user: LeaderUser):
     data = payload.model_dump()
     _require_quality_title(data.get("title") or "", publishing=bool(data.get("is_published")))
     _require_playable(
@@ -115,6 +102,7 @@ async def create_media_item(payload: MediaItemCreate, db: DbSession, _: LeaderUs
     )
     if data.get("is_published"):
         data["published_at"] = datetime.utcnow()
+    data["organization_id"] = await resolve_org_id(db, current_user)
     item = MediaItem(**data)
     db.add(item)
     await db.flush()
@@ -130,8 +118,11 @@ async def list_media_items(
     published_only: bool = True,
     skip: int = 0,
     limit: int = 20,
+    current_user: OptionalUser = None,
 ):
     query = select(MediaItem)
+    oid = await resolve_org_id(db, current_user)
+    query = query.where(MediaItem.organization_id == oid)
     if published_only:
         query = query.where(MediaItem.is_published == True)  # noqa: E712
     if media_type:
@@ -164,17 +155,11 @@ async def update_media_item(
     data = payload.model_dump(exclude_unset=True)
     for k, v in data.items():
         setattr(item, k, v)
-
     will_publish = item.is_published if "is_published" not in data else bool(data["is_published"])
     _require_quality_title(item.title, publishing=will_publish)
     _require_playable(
-        item.media_type,
-        item.video_url,
-        item.audio_url,
-        item.description,
-        publishing=will_publish,
+        item.media_type, item.video_url, item.audio_url, item.description, publishing=will_publish,
     )
-
     if data.get("is_published") is True and not item.published_at:
         item.published_at = datetime.utcnow()
     await db.flush()
@@ -201,11 +186,7 @@ async def publish_media_item(item_id: int, db: DbSession, _: LeaderUser):
         raise HTTPException(status_code=404, detail="Media item not found")
     _require_quality_title(item.title, publishing=True)
     _require_playable(
-        item.media_type,
-        item.video_url,
-        item.audio_url,
-        item.description,
-        publishing=True,
+        item.media_type, item.video_url, item.audio_url, item.description, publishing=True,
     )
     item.is_published = True
     item.published_at = datetime.utcnow()
@@ -215,12 +196,7 @@ async def publish_media_item(item_id: int, db: DbSession, _: LeaderUser):
 
 
 @router.post("/cleanup-weak")
-async def cleanup_weak_media(
-    db: DbSession,
-    _: LeaderUser,
-    delete: bool = False,
-):
-    """Unpublish (default) or delete items with weak titles / no playable content."""
+async def cleanup_weak_media(db: DbSession, _: LeaderUser, delete: bool = False):
     result = await db.execute(select(MediaItem))
     items = result.scalars().all()
     touched: list[dict] = []
@@ -243,12 +219,8 @@ async def cleanup_weak_media(
 
 
 @router.post("/upload")
-async def upload_media_file(
-    _: LeaderUser,
-    file: UploadFile = File(...),
-):
+async def upload_media_file(_: LeaderUser, file: UploadFile = File(...)):
     from app.services import storage as storage_service
-
     if not storage_service.storage_configured():
         raise HTTPException(
             status_code=503,
@@ -263,9 +235,7 @@ async def upload_media_file(
         raise HTTPException(status_code=400, detail="File too large (max 200MB)")
     try:
         result = storage_service.upload_bytes(
-            raw,
-            file.filename or "upload.bin",
-            file.content_type or "application/octet-stream",
+            raw, file.filename or "upload.bin", file.content_type or "application/octet-stream",
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
