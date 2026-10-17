@@ -12,6 +12,7 @@ from app.db.base import Base
 
 import app.models  # noqa: F401
 from app.bootstrap import ensure_columns, ensure_default_tenant, ensure_platform_accounts
+from app.services.tenant import set_request_tenant_slug
 
 settings = get_settings()
 
@@ -52,45 +53,38 @@ async def _auto_seed_if_empty() -> None:
             event_count = (await db.execute(select(func.count()).select_from(Event))).scalar() or 0
             if event_count == 0:
                 now = datetime.utcnow()
-                days_until_sunday = (6 - now.weekday()) % 7
-                if days_until_sunday == 0:
-                    days_until_sunday = 7
-                start = now + timedelta(days=days_until_sunday)
-                start = start.replace(hour=10, minute=0, second=0, microsecond=0)
                 db.add(
                     Event(
                         title="Sunday Worship",
                         description="Join us for worship and the Word.",
-                        location="Main Sanctuary",
-                        start_at=start,
-                        is_public=True,
+                        location="Main Auditorium",
+                        start_at=now + timedelta(days=(6 - now.weekday()) % 7 or 7),
+                        end_at=None,
+                        is_published=True,
                     )
                 )
 
-            series = (await db.execute(select(Series).limit(1))).scalar_one_or_none()
-            if series is None:
-                series = Series(title="Welcome Series", description="Getting started")
+            media_count = (await db.execute(select(func.count()).select_from(MediaItem))).scalar() or 0
+            if media_count == 0:
+                series = Series(title="Foundations", description="Core teachings", is_published=True)
                 db.add(series)
                 await db.flush()
-
-            media_count = (await db.execute(select(func.count()).select_from(MediaItem))).scalar() or 0
-            if media_count == 0 and series is not None:
                 db.add(
                     MediaItem(
-                        title="What Is the Gospel?",
-                        description="An introduction to the good news of Jesus.",
-                        media_type="sermon",
-                        series_id=series.id,
+                        title="Welcome to Grace",
+                        description="An introduction to our community.",
                         speaker="Pastor",
+                        media_type="video",
+                        video_url="https://www.youtube.com/watch?v=dQw4w9WgXcQ",
                         is_published=True,
-                        published_at=datetime.utcnow(),
+                        series_id=series.id,
                     )
                 )
 
             await db.commit()
         except Exception as e:
+            print(f"[seed] skip: {e}")
             await db.rollback()
-            print(f"[seed] skipped: {e}")
 
 
 @asynccontextmanager
@@ -102,46 +96,33 @@ async def lifespan(app: FastAPI):
     await ensure_platform_accounts()
     await _auto_seed_if_empty()
     yield
-    await engine.dispose()
 
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
     openapi_url=f"{settings.API_V1_STR}/openapi.json",
-    docs_url="/docs",
-    redoc_url="/redoc",
     lifespan=lifespan,
 )
 
-_cors_origins = list(settings.BACKEND_CORS_ORIGINS or [])
-for extra in (
-    "https://church-platform-mu.vercel.app",
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-):
-    if extra not in _cors_origins:
-        _cors_origins.append(extra)
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=_cors_origins,
-    allow_origin_regex=r"https://.*\.vercel\.app",
+    allow_origins=settings.BACKEND_CORS_ORIGINS or ["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["*"],
 )
 
 
-@app.exception_handler(Exception)
-async def unhandled_exception_handler(request: Request, exc: Exception):
-    print(f"[error] {request.method} {request.url.path}: {exc!r}")
-    return JSONResponse(
-        status_code=500,
-        content={
-            "detail": "Server error. If this persists after a redeploy, check Render logs."
-        },
-    )
+@app.middleware("http")
+async def tenant_slug_middleware(request: Request, call_next):
+    """Public multi-tenant: X-Tenant-Slug header or ?tenant=slug (from subdomain/path on web)."""
+    slug = request.headers.get("X-Tenant-Slug") or request.query_params.get("tenant")
+    set_request_tenant_slug(slug)
+    try:
+        response = await call_next(request)
+    finally:
+        set_request_tenant_slug(None)
+    return response
 
 
 app.include_router(api_router, prefix=settings.API_V1_STR)
@@ -149,4 +130,9 @@ app.include_router(api_router, prefix=settings.API_V1_STR)
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "service": settings.PROJECT_NAME}
+    return {"status": "ok"}
+
+
+@app.exception_handler(Exception)
+async def unhandled(request: Request, exc: Exception):
+    return JSONResponse(status_code=500, content={"detail": str(exc)})
