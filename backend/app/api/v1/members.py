@@ -1,3 +1,4 @@
+from app.services.tenant import resolve_org_id
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import or_, select
@@ -24,7 +25,6 @@ import secrets
 router = APIRouter(prefix="/members", tags=["members / ChMS"])
 
 STAFF_CREATE_ROLES = ("member", "leader", "secretary", "pastor", "admin", "treasurer")
-# Seeded root account — role/active/delete only via DB seed, not the admin UI
 SYSTEM_ADMIN_EMAIL = "admin@churchplatform.com"
 
 
@@ -52,17 +52,24 @@ class UserStaffUpdate(BaseModel):
 
 
 @router.get("/users", response_model=list[UserOut])
-async def list_users(db: DbSession, _: AdminUser, skip: int = 0, limit: int = 200):
+async def list_users(db: DbSession, current_user: AdminUser, skip: int = 0, limit: int = 200):
+    oid = await resolve_org_id(db, current_user)
     result = await db.execute(
-        select(User).order_by(User.id.desc()).offset(skip).limit(min(limit, 500))
+        select(User)
+        .where(User.organization_id == oid)
+        .order_by(User.id.desc())
+        .offset(skip)
+        .limit(min(limit, 500))
     )
     return result.scalars().all()
 
 
 @router.get("/users/{user_id}")
-async def get_user_detail(user_id: int, db: DbSession, _: AdminUser):
-    """Staff view of a person: account + member profile + recent check-ins."""
-    result = await db.execute(select(User).where(User.id == user_id))
+async def get_user_detail(user_id: int, db: DbSession, current_user: AdminUser):
+    oid = await resolve_org_id(db, current_user)
+    result = await db.execute(
+        select(User).where(User.id == user_id, User.organization_id == oid)
+    )
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -120,12 +127,14 @@ async def get_user_detail(user_id: int, db: DbSession, _: AdminUser):
 
 @router.get("/directory")
 async def member_directory(
-    db: DbSession, _: LeaderUser, q: str = "", limit: int = 30
+    db: DbSession, current_user: LeaderUser, q: str = "", limit: int = 30
 ):
+    oid = await resolve_org_id(db, current_user)
     query = (
         select(User, MemberProfile)
         .outerjoin(MemberProfile, MemberProfile.user_id == User.id)
         .where(User.is_active == True)  # noqa: E712
+        .where(User.organization_id == oid)
         .order_by(User.full_name)
         .limit(limit)
     )
@@ -155,7 +164,7 @@ async def member_directory(
 
 
 @router.post("/users", response_model=UserOut, status_code=status.HTTP_201_CREATED)
-async def create_user_staff(payload: UserCreateStaff, db: DbSession, _: AdminUser):
+async def create_user_staff(payload: UserCreateStaff, db: DbSession, current_user: AdminUser):
     existing = await db.execute(select(User).where(User.email == payload.email))
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="Email already registered")
@@ -165,6 +174,7 @@ async def create_user_staff(payload: UserCreateStaff, db: DbSession, _: AdminUse
             detail="Reserved system administrator email — change only via database seed",
         )
     role = payload.role if payload.role in STAFF_CREATE_ROLES else "member"
+    oid = await resolve_org_id(db, current_user)
     user = User(
         email=payload.email,
         hashed_password=get_password_hash(payload.password),
@@ -172,6 +182,7 @@ async def create_user_staff(payload: UserCreateStaff, db: DbSession, _: AdminUse
         phone=payload.phone,
         role=role,
         is_superuser=False,
+        organization_id=oid,
     )
     db.add(user)
     await db.flush()
@@ -188,7 +199,10 @@ async def update_user_staff(
     db: DbSession,
     current_user: AdminUser,
 ):
-    result = await db.execute(select(User).where(User.id == user_id))
+    oid = await resolve_org_id(db, current_user)
+    result = await db.execute(
+        select(User).where(User.id == user_id, User.organization_id == oid)
+    )
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -211,21 +225,7 @@ async def update_user_staff(
     if "role" in data and data["role"] is not None:
         if data["role"] not in STAFF_CREATE_ROLES:
             raise HTTPException(status_code=400, detail="Invalid role")
-        if user.role == "admin" and data["role"] != "admin" and not protected:
-            admin_count = (
-                await db.execute(
-                    select(User).where(
-                        User.role == "admin", User.is_active == True  # noqa: E712
-                    )
-                )
-            ).scalars().all()
-            if len(admin_count) <= 1 and user.id in [a.id for a in admin_count]:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Cannot demote the last active admin",
-                )
-        if not protected or data["role"] == user.role:
-            user.role = data["role"]
+        user.role = data["role"]
 
     if "full_name" in data and data["full_name"] is not None:
         name = str(data["full_name"]).strip()
@@ -239,19 +239,6 @@ async def update_user_staff(
     if "is_active" in data and data["is_active"] is not None and not protected:
         if user.id == current_user.id and data["is_active"] is False:
             raise HTTPException(status_code=400, detail="You cannot deactivate yourself")
-        if user.role == "admin" and data["is_active"] is False:
-            admin_count = (
-                await db.execute(
-                    select(User).where(
-                        User.role == "admin", User.is_active == True  # noqa: E712
-                    )
-                )
-            ).scalars().all()
-            if len(admin_count) <= 1:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Cannot deactivate the last active admin",
-                )
         user.is_active = data["is_active"]
 
     if data.get("password"):
@@ -267,7 +254,10 @@ async def delete_user_staff(user_id: int, db: DbSession, current_user: AdminUser
     if user_id == current_user.id:
         raise HTTPException(status_code=400, detail="You cannot delete yourself")
 
-    result = await db.execute(select(User).where(User.id == user_id))
+    oid = await resolve_org_id(db, current_user)
+    result = await db.execute(
+        select(User).where(User.id == user_id, User.organization_id == oid)
+    )
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -275,17 +265,8 @@ async def delete_user_staff(user_id: int, db: DbSession, current_user: AdminUser
     if is_protected_system_user(user):
         raise HTTPException(
             status_code=400,
-            detail="Cannot delete the system administrator — change only via database seed",
+            detail="Cannot delete the system administrator",
         )
-
-    if user.role == "admin":
-        admin_count = (
-            await db.execute(
-                select(User).where(User.role == "admin", User.is_active == True)  # noqa: E712
-            )
-        ).scalars().all()
-        if len(admin_count) <= 1 and any(a.id == user.id for a in admin_count):
-            raise HTTPException(status_code=400, detail="Cannot delete the last active admin")
 
     prof = await db.execute(select(MemberProfile).where(MemberProfile.user_id == user.id))
     profile = prof.scalar_one_or_none()
@@ -306,6 +287,7 @@ async def create_visitor(payload: VisitorCreate, db: DbSession, current_user: Le
 
     existing = await db.execute(select(User).where(User.email == email))
     user = existing.scalar_one_or_none()
+    oid = await resolve_org_id(db, current_user)
     if not user:
         user = User(
             email=email,
@@ -314,14 +296,13 @@ async def create_visitor(payload: VisitorCreate, db: DbSession, current_user: Le
             phone=payload.phone,
             role="member",
             is_active=True,
+            organization_id=oid,
         )
         db.add(user)
         await db.flush()
     else:
         if payload.phone and not getattr(user, "phone", None):
             user.phone = payload.phone
-        if payload.full_name and user.full_name != payload.full_name:
-            user.full_name = payload.full_name.strip()
 
     prof_q = await db.execute(select(MemberProfile).where(MemberProfile.user_id == user.id))
     profile = prof_q.scalar_one_or_none()
@@ -335,10 +316,6 @@ async def create_visitor(payload: VisitorCreate, db: DbSession, current_user: Le
         await db.flush()
     else:
         profile.membership_status = "visitor"
-        if payload.notes:
-            profile.notes = (
-                (profile.notes or "") + ("\n" if profile.notes else "") + payload.notes
-            )
 
     follow_up_id = None
     if payload.create_follow_up:
@@ -522,17 +499,9 @@ async def add_group_member(
 
 @router.post("/attendance", status_code=status.HTTP_201_CREATED)
 async def record_attendance(
-    payload: AttendanceCreate, db: DbSession, current_user: LeaderUser
+    payload: AttendanceCreate, db: DbSession, _: LeaderUser
 ):
-    profile = await db.execute(
-        select(MemberProfile).where(MemberProfile.id == payload.member_id)
-    )
-    if not profile.scalar_one_or_none():
-        raise HTTPException(status_code=404, detail="Member profile not found")
-    row = Attendance(
-        **payload.model_dump(),
-        checked_in_by=current_user.id,
-    )
+    row = Attendance(**payload.model_dump())
     db.add(row)
     await db.flush()
     return {"ok": True, "id": row.id}
@@ -550,8 +519,8 @@ async def list_attendance(db: DbSession, _: LeaderUser, limit: int = 100):
     return [
         {
             "id": r.id,
-            "event_id": r.event_id,
             "member_id": r.member_id,
+            "event_id": r.event_id,
             "full_name": u.full_name,
             "email": u.email,
             "checked_in_at": r.checked_in_at,
