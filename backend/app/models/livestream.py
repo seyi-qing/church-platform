@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -22,4 +22,7 @@ class LivestreamSession(Base):
     actual_start: Mapped[datetime | None] = mapped_column(DateTime)
     actual_end: Mapped[datetime | None] = mapped_column(DateTime)
     is_public: Mapped[bool] = mapped_column(Boolean, default=True)
+    organization_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("organizations.id"), nullable=True, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

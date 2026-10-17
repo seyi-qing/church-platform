@@ -1,6 +1,6 @@
-"""Multi-tenant helpers: resolve org, backfill, scope queries."""
+"""Multi-tenant helpers: resolve org and HARD scope queries."""
 
-from sqlalchemy import select, text, update
+from sqlalchemy import Select, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.organization import Organization
@@ -37,15 +37,24 @@ async def get_default_org(db: AsyncSession) -> Organization:
 
 
 async def resolve_org_id(db: AsyncSession, user: User | None) -> int:
-    """Active tenant for this request. Superuser may have organization_id from act-as."""
-    if user and user.organization_id:
-        return user.organization_id
+    """Active tenant for this request.
+
+    - User with organization_id (including after Act-as) → that org
+    - Anonymous public → default Grace (until subdomain routing)
+    """
+    if user is not None and user.organization_id is not None:
+        return int(user.organization_id)
     org = await get_default_org(db)
-    return org.id
+    return int(org.id)
+
+
+def scope_query(query: Select, column, org_id: int) -> Select:
+    """HARD isolation: only rows for this organization_id."""
+    return query.where(column == org_id)
 
 
 async def backfill_org_ids(db: AsyncSession, org_id: int) -> dict[str, int]:
-    """Assign null organization_id rows to default church so isolation can start."""
+    """Assign null organization_id rows to the given church (Grace once at bootstrap)."""
     tables = [
         "users",
         "media_items",
@@ -56,6 +65,7 @@ async def backfill_org_ids(db: AsyncSession, org_id: int) -> dict[str, int]:
         "contact_inquiries",
         "livestream_sessions",
         "donations",
+        "expenses",
     ]
     counts: dict[str, int] = {}
     for table in tables:
