@@ -85,6 +85,14 @@ export function Nav() {
       {isLoggedIn && (
         <div className="py-1">
           <Link
+            href="/dashboard"
+            role="menuitem"
+            className="block px-3 py-2.5 text-sm font-medium text-brand-700 hover:bg-blue-50"
+            onClick={() => setMenuOpen(false)}
+          >
+            My dashboard
+          </Link>
+          <Link
             href="/profile"
             role="menuitem"
             className="block px-3 py-2.5 text-sm text-slate-800 hover:bg-slate-50"
