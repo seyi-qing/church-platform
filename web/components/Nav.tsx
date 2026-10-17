@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 import { clearAuth, getToken, getStoredUser, isStaffRole } from "@/lib/auth";
 import { ChurchLogo } from "@/components/ChurchLogo";
+import { apiFetch } from "@/lib/api";
 
 const links = [
   { href: "/", label: "Home" },
@@ -28,6 +29,7 @@ export function Nav() {
   const [user, setUser] = useState<any>(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [churchName, setChurchName] = useState<string | null>(null);
   const menuId = useId();
   const menuBtnRef = useRef<HTMLButtonElement>(null);
 
@@ -41,6 +43,12 @@ export function Nav() {
       setIsLoggedIn(false);
       setUser(null);
     }
+    // Active church brand (Act-as, ?tenant=, or cookie)
+    apiFetch<{ name?: string }>("/tenants/current")
+      .then((org) => {
+        if (org?.name) setChurchName(org.name);
+      })
+      .catch(() => {});
   }, [pathname]);
 
   useEffect(() => {
@@ -154,8 +162,13 @@ export function Nav() {
   return (
     <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-2.5">
-        <Link href="/" className="flex min-w-0 items-center" onClick={() => setMenuOpen(false)}>
-          <ChurchLogo size={36} />
+        <Link
+          href="/"
+          className="flex min-w-0 items-center"
+          onClick={() => setMenuOpen(false)}
+          aria-label={churchName || "Home"}
+        >
+          <ChurchLogo name={churchName} size={36} />
         </Link>
 
         <nav className="hidden items-center gap-1 md:flex" aria-label="Main">
