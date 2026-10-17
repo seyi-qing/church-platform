@@ -13,6 +13,9 @@ class CareRequest(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     member_id: Mapped[int | None] = mapped_column(ForeignKey("member_profiles.id"), index=True)
     campus_id: Mapped[int | None] = mapped_column(ForeignKey("campuses.id"), index=True)
+    organization_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("organizations.id"), nullable=True, index=True
+    )
     requester_name: Mapped[str] = mapped_column(String(255))
     requester_email: Mapped[str | None] = mapped_column(String(255))
     requester_phone: Mapped[str | None] = mapped_column(String(50))
@@ -50,9 +53,7 @@ class CareFollowUp(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     care_request_id: Mapped[int] = mapped_column(ForeignKey("care_requests.id"), index=True)
     assigned_to: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
-    title: Mapped[str] = mapped_column(String(255), nullable=False)
-    notes: Mapped[str | None] = mapped_column(Text)
-    due_at: Mapped[datetime | None] = mapped_column(DateTime)
-    status: Mapped[str] = mapped_column(String(30), default="pending")
+    due_date: Mapped[date | None] = mapped_column(Date)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime)
+    notes: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

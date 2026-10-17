@@ -2,6 +2,22 @@ import { getAccessToken, clearAuth } from "./auth";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
 
+function getTenantSlug(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const fromLs = localStorage.getItem("public_tenant_slug");
+    if (fromLs) return fromLs;
+    const m = document.cookie.match(/(?:^|; )tenant_slug=([^;]*)/);
+    if (m) return decodeURIComponent(m[1]);
+    const params = new URLSearchParams(window.location.search);
+    const q = params.get("tenant");
+    if (q) return q;
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
 export async function apiFetch<T>(
   path: string,
   options: RequestInit = {},
@@ -11,40 +27,31 @@ export async function apiFetch<T>(
     "Content-Type": "application/json",
     ...(options.headers as Record<string, string>),
   };
+  const tenantSlug = getTenantSlug();
+  if (tenantSlug) headers["X-Tenant-Slug"] = tenantSlug;
 
-  const authToken = token !== undefined ? token : getAccessToken();
-  if (authToken) {
-    headers["Authorization"] = `Bearer ${authToken}`;
-  }
+  const auth = token ?? getAccessToken();
+  if (auth) headers["Authorization"] = `Bearer ${auth}`;
 
   const res = await fetch(`${API_URL}${path}`, {
     ...options,
     headers,
-    // Avoid stale empty lists from Next.js static/SSR cache
-    cache: options.cache ?? "no-store",
   });
 
   if (res.status === 401) {
     clearAuth();
-    if (typeof window !== "undefined") {
-      const p = window.location.pathname;
-      if (!p.startsWith("/login") && !p.startsWith("/admin/login")) {
-        window.location.href = p.startsWith("/admin") ? "/admin/login" : "/login";
-      }
-    }
-    throw new Error("Unauthorized");
   }
 
   if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    const detail = body.detail;
-    const message =
-      typeof detail === "string"
-        ? detail
-        : Array.isArray(detail)
-          ? detail[0]?.msg
-          : res.statusText;
-    throw new Error(message || "Request failed");
+    let detail = res.statusText;
+    try {
+      const body = await res.json();
+      detail = body.detail || body.message || detail;
+      if (Array.isArray(detail)) detail = detail.map((d: any) => d.msg || d).join(", ");
+    } catch {
+      /* ignore */
+    }
+    throw new Error(typeof detail === "string" ? detail : "Request failed");
   }
 
   if (res.status === 204) return undefined as T;
