@@ -18,6 +18,7 @@ async def ensure_columns() -> None:
         "ALTER TABLE contact_inquiries ADD COLUMN IF NOT EXISTS organization_id INTEGER",
         "ALTER TABLE livestream_sessions ADD COLUMN IF NOT EXISTS organization_id INTEGER",
         "ALTER TABLE donations ADD COLUMN IF NOT EXISTS organization_id INTEGER",
+        "ALTER TABLE expenses ADD COLUMN IF NOT EXISTS organization_id INTEGER",
         "ALTER TABLE organizations ADD COLUMN IF NOT EXISTS subscription_status VARCHAR(40) DEFAULT 'trial'",
         "ALTER TABLE organizations ADD COLUMN IF NOT EXISTS stripe_customer_id VARCHAR(120)",
         "ALTER TABLE organizations ADD COLUMN IF NOT EXISTS stripe_subscription_id VARCHAR(120)",
