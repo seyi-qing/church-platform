@@ -114,7 +114,6 @@ export default function AdminLayout({
     }
     setUser(u);
     setReady(true);
-    // Prefer API (Act-as) over cache so header matches active tenant
     apiFetch<{ name?: string }>("/tenants/current")
       .then((org) => {
         if (org?.name) {
@@ -156,27 +155,39 @@ export default function AdminLayout({
     try {
       localStorage.removeItem("active_tenant_id");
       localStorage.removeItem("active_tenant_name");
+      localStorage.removeItem("public_tenant_slug");
     } catch {
       /* ignore */
     }
-    router.push("/admin/login");
+    if (typeof window !== "undefined") {
+      window.location.href = "/admin/login";
+    } else {
+      router.push("/admin/login");
+    }
   }
 
-  function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
+  function roleBadge() {
+    if (user?.is_superuser) return "Platform";
+    const r = (user?.role || "staff").toString();
+    return r.charAt(0).toUpperCase() + r.slice(1);
+  }
+
+  function SidebarNav({ onNavigate, hideBrand }: { onNavigate?: () => void; hideBrand?: boolean }) {
     return (
       <>
-        <div className="border-b border-slate-800 p-4">
-          <div className="text-sm font-bold tracking-wide text-white">{churchName}</div>
-          <p className="mt-0.5 text-xs font-semibold uppercase tracking-wider text-blue-300">
-            Admin · {user.role}
-            {user.is_superuser ? " · platform" : ""}
-          </p>
-          {churchName && churchName !== "Church" && (
-            <p className="mt-0.5 text-[10px] font-medium text-emerald-300">
-              Working as {churchName}
+        {!hideBrand && (
+          <div className="border-b border-slate-800 p-4">
+            <div className="text-sm font-bold tracking-wide text-white">{churchName}</div>
+            <p className="mt-0.5 text-xs font-semibold uppercase tracking-wider text-blue-300">
+              {roleBadge()}
             </p>
-          )}
-        </div>
+            {churchName && churchName !== "Church" && (
+              <p className="mt-0.5 text-[10px] font-medium text-emerald-300">
+                Working as {churchName}
+              </p>
+            )}
+          </div>
+        )}
         <nav className="mt-2 flex-1 space-y-3 overflow-y-auto px-2 pb-4" aria-label="Admin">
           {NAV_GROUPS.map((group) => {
             const items = group.items.filter(allowed);
@@ -262,10 +273,7 @@ export default function AdminLayout({
           </button>
           <div className="min-w-0 flex-1">
             <div className="text-sm font-bold">{churchName}</div>
-            <div className="text-[10px] uppercase tracking-wider text-blue-300">
-              Admin · {user.role}
-              {user.is_superuser ? " · platform" : ""}
-            </div>
+            <div className="text-[10px] uppercase tracking-wider text-blue-300">{roleBadge()}</div>
           </div>
 
           <Link
@@ -340,17 +348,30 @@ export default function AdminLayout({
               role="dialog"
               aria-label="Admin menu"
             >
-              <div className="flex items-center justify-end border-b border-slate-800 px-2 py-1">
+              <div className="flex items-start justify-between gap-2 border-b border-slate-800 p-4">
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-bold tracking-wide text-white">{churchName}</div>
+                  <p className="mt-0.5 text-xs font-semibold uppercase tracking-wider text-blue-300">
+                    {roleBadge()}
+                  </p>
+                  {churchName && churchName !== "Church" && (
+                    <p className="mt-0.5 text-[10px] font-medium text-emerald-300">
+                      Working as {churchName}
+                    </p>
+                  )}
+                </div>
                 <button
                   type="button"
                   aria-label="Close menu"
                   onClick={() => setMenuOpen(false)}
-                  className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg text-slate-300 hover:bg-slate-800"
+                  className="inline-flex min-h-[40px] min-w-[40px] shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white"
                 >
-                  ✕
+                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
                 </button>
               </div>
-              <SidebarNav onNavigate={() => setMenuOpen(false)} />
+              <SidebarNav onNavigate={() => setMenuOpen(false)} hideBrand />
             </aside>
           </div>
         )}
