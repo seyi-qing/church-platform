@@ -320,6 +320,7 @@ async def create_visitor(payload: VisitorCreate, db: DbSession, current_user: Le
     follow_up_id = None
     if payload.create_follow_up:
         req = CareRequest(
+            organization_id=oid,
             member_id=profile.id,
             requester_name=payload.full_name.strip(),
             requester_email=email if not email.endswith("@grace.local") else None,
@@ -466,8 +467,9 @@ async def update_my_account(
 
 
 @router.post("/groups", response_model=GroupOut, status_code=status.HTTP_201_CREATED)
-async def create_group(payload: GroupCreate, db: DbSession, _: LeaderUser):
-    group = Group(**payload.model_dump())
+async def create_group(payload: GroupCreate, db: DbSession, current_user: LeaderUser):
+    oid = await resolve_org_id(db, current_user)
+    group = Group(**payload.model_dump(), organization_id=oid)
     db.add(group)
     await db.flush()
     await db.refresh(group)
@@ -476,7 +478,8 @@ async def create_group(payload: GroupCreate, db: DbSession, _: LeaderUser):
 
 @router.get("/groups", response_model=list[GroupOut])
 async def list_groups(db: DbSession, current_user: CurrentUser, public_only: bool = False):
-    query = select(Group)
+    oid = await resolve_org_id(db, current_user)
+    query = select(Group).where(Group.organization_id == oid)
     if public_only or current_user.role == "member":
         query = query.where(Group.is_public == True)  # noqa: E712
     result = await db.execute(query.order_by(Group.name))
@@ -508,11 +511,13 @@ async def record_attendance(
 
 
 @router.get("/attendance")
-async def list_attendance(db: DbSession, _: LeaderUser, limit: int = 100):
+async def list_attendance(db: DbSession, current_user: LeaderUser, limit: int = 100):
+    oid = await resolve_org_id(db, current_user)
     result = await db.execute(
         select(Attendance, MemberProfile, User)
         .join(MemberProfile, MemberProfile.id == Attendance.member_id)
         .join(User, User.id == MemberProfile.user_id)
+        .where(User.organization_id == oid)
         .order_by(Attendance.checked_in_at.desc())
         .limit(limit)
     )
