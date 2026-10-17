@@ -21,6 +21,9 @@ class Donation(Base):
     recurring_donation_id: Mapped[int | None] = mapped_column(ForeignKey("recurring_donations.id"))
     donor_email: Mapped[str | None] = mapped_column(String(255))
     donor_name: Mapped[str | None] = mapped_column(String(255))
+    organization_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("organizations.id"), nullable=True, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     user = relationship("User", back_populates="donations")
@@ -38,6 +41,9 @@ class RecurringDonation(Base):
     interval: Mapped[str] = mapped_column(String(20), default="month")
     stripe_subscription_id: Mapped[str | None] = mapped_column(String(255))
     status: Mapped[str] = mapped_column(String(50), default="active")
+    organization_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("organizations.id"), nullable=True, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     next_payment_at: Mapped[datetime | None] = mapped_column(DateTime)
 

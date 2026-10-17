@@ -9,25 +9,65 @@ from app.models.giving import Donation
 from app.models.media import MediaItem
 from app.models.member import Attendance, MemberProfile
 from app.models.user import User
+from app.services.tenant import resolve_org_id
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
 
 
 @router.get("/overview")
-async def overview(db: DbSession, _: AdminUser, days: int = 30):
+async def overview(db: DbSession, current_user: AdminUser, days: int = 30):
+    oid = await resolve_org_id(db, current_user)
     since = datetime.utcnow() - timedelta(days=days)
-    users = (await db.execute(select(func.count()).select_from(User))).scalar() or 0
-    members = (await db.execute(select(func.count()).select_from(MemberProfile))).scalar() or 0
+    users = (
+        await db.execute(
+            select(func.count()).select_from(User).where(User.organization_id == oid)
+        )
+    ).scalar() or 0
+    members = (
+        await db.execute(
+            select(func.count())
+            .select_from(MemberProfile)
+            .join(User, User.id == MemberProfile.user_id)
+            .where(User.organization_id == oid)
+        )
+    ).scalar() or 0
     donations_q = await db.execute(
         select(func.coalesce(func.sum(Donation.amount_cents), 0)).where(
             Donation.status == "succeeded",
             Donation.created_at >= since,
+            Donation.organization_id == oid,
         )
     )
     giving_cents = donations_q.scalar() or 0
-    media = (await db.execute(select(func.count()).select_from(MediaItem).where(MediaItem.is_published == True))).scalar() or 0  # noqa: E712
-    attendance = (await db.execute(select(func.count()).select_from(Attendance).where(Attendance.checked_in_at >= since))).scalar() or 0
-    registrations = (await db.execute(select(func.count()).select_from(EventRegistration).where(EventRegistration.registered_at >= since))).scalar() or 0
+    media = (
+        await db.execute(
+            select(func.count())
+            .select_from(MediaItem)
+            .where(
+                MediaItem.is_published == True,  # noqa: E712
+                MediaItem.organization_id == oid,
+            )
+        )
+    ).scalar() or 0
+    attendance = (
+        await db.execute(
+            select(func.count())
+            .select_from(Attendance)
+            .join(MemberProfile, MemberProfile.id == Attendance.member_id)
+            .join(User, User.id == MemberProfile.user_id)
+            .where(
+                Attendance.checked_in_at >= since,
+                User.organization_id == oid,
+            )
+        )
+    ).scalar() or 0
+    registrations = (
+        await db.execute(
+            select(func.count()).select_from(EventRegistration).where(
+                EventRegistration.registered_at >= since
+            )
+        )
+    ).scalar() or 0
     return {
         "days": days,
         "users": users,
@@ -40,11 +80,16 @@ async def overview(db: DbSession, _: AdminUser, days: int = 30):
 
 
 @router.get("/giving-by-fund")
-async def giving_by_fund(db: DbSession, _: AdminUser, days: int = 30):
+async def giving_by_fund(db: DbSession, current_user: AdminUser, days: int = 30):
+    oid = await resolve_org_id(db, current_user)
     since = datetime.utcnow() - timedelta(days=days)
     result = await db.execute(
         select(Donation.fund, func.sum(Donation.amount_cents))
-        .where(Donation.status == "succeeded", Donation.created_at >= since)
+        .where(
+            Donation.status == "succeeded",
+            Donation.created_at >= since,
+            Donation.organization_id == oid,
+        )
         .group_by(Donation.fund)
     )
     return [{"fund": r[0], "amount_cents": int(r[1] or 0)} for r in result.all()]
