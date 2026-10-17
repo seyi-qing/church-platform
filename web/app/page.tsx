@@ -92,7 +92,7 @@ export default function HomePage() {
       })
       .catch(() => {});
 
-    fetch(`${API_URL}/gallery/photos?published_only=true&limit=12`, {
+    fetch(`${API_URL}/gallery?published_only=true&limit=12`, {
       signal: ctrl.signal,
       cache: "no-store",
     })
@@ -142,40 +142,51 @@ export default function HomePage() {
         </div>
       )}
 
-      <section className="rounded-2xl bg-gradient-to-br from-brand-700 to-blue-800 px-6 py-12 text-center text-white shadow-lg sm:px-10 sm:py-14">
-        <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl">
-          Welcome to {BRAND.name}
+      <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-brand-700 via-blue-800 to-slate-900 px-6 py-14 text-center text-white shadow-lg sm:px-10 sm:py-16">
+        <div className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-white/5" />
+        <div className="pointer-events-none absolute -bottom-20 -left-10 h-56 w-56 rounded-full bg-blue-400/10" />
+        <p className="relative text-[11px] font-bold uppercase tracking-[0.18em] text-blue-200">
+          Welcome home
+        </p>
+        <h1 className="relative mt-3 text-3xl font-extrabold tracking-tight sm:text-4xl lg:text-5xl">
+          {BRAND.name}
         </h1>
-        <p className="mx-auto mt-3 max-w-md text-base text-blue-100 sm:text-lg">
+        <p className="relative mx-auto mt-4 max-w-md text-base text-blue-100 sm:text-lg">
           A community following Jesus together
         </p>
-        <p className="mx-auto mt-2 max-w-lg text-sm text-blue-100/90">
+        <p className="relative mx-auto mt-2 max-w-lg text-sm text-blue-100/85">
           Join us this Sunday in person or online. Grow in faith, serve together, and find community.
         </p>
-        <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+        <div className="relative mt-9 flex flex-wrap items-center justify-center gap-3">
           <Link
             href="/live"
-            className="rounded-lg bg-white px-6 py-3 text-sm font-semibold text-brand-800 shadow hover:bg-blue-50"
+            className="rounded-xl bg-white px-6 py-3 text-sm font-bold text-brand-800 shadow-md hover:bg-blue-50"
           >
             Watch Live
           </Link>
           <Link
             href="/sermons"
-            className="rounded-lg border border-white/40 px-6 py-3 text-sm font-semibold text-white hover:bg-white/10"
+            className="rounded-xl bg-white/15 px-5 py-3 text-sm font-semibold text-white ring-1 ring-white/30 hover:bg-white/25"
           >
             Sermons
           </Link>
           <Link
             href="/give"
-            className="rounded-lg border border-white/40 px-6 py-3 text-sm font-semibold text-white hover:bg-white/10"
+            className="rounded-xl bg-white/15 px-5 py-3 text-sm font-semibold text-white ring-1 ring-white/30 hover:bg-white/25"
           >
             Give
           </Link>
           <Link
             href="/events"
-            className="rounded-lg border border-white/40 px-6 py-3 text-sm font-semibold text-white hover:bg-white/10"
+            className="rounded-xl bg-white/15 px-5 py-3 text-sm font-semibold text-white ring-1 ring-white/30 hover:bg-white/25"
           >
             Events
+          </Link>
+          <Link
+            href="/contact"
+            className="rounded-xl px-5 py-3 text-sm font-semibold text-blue-100 underline-offset-4 hover:text-white hover:underline"
+          >
+            Plan a visit
           </Link>
         </div>
       </section>
@@ -256,45 +267,32 @@ export default function HomePage() {
         <div className="mb-4 flex items-end justify-between gap-4">
           <div>
             <h2 className="text-2xl font-bold text-slate-900">Upcoming events</h2>
-            <p className="mt-1 text-sm text-slate-500">Plan your week with us</p>
+            <p className="mt-1 text-sm text-slate-500">What's next at church</p>
           </div>
           <Link href="/events" className="text-sm font-semibold text-brand-600 hover:underline">
-            All events
+            View all
           </Link>
         </div>
         {events.length === 0 ? (
           <p className="rounded-xl border border-dashed bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
-            No upcoming events listed.
+            No upcoming events.
           </p>
         ) : (
           <ul className="space-y-3">
-            {events.map((e) => (
-              <li key={e.id} className="rounded-xl border bg-white p-4 shadow-sm">
-                <p className="font-semibold text-slate-900">{e.title}</p>
-                <p className="mt-1 text-sm text-slate-500">
-                  {new Date(e.start_at).toLocaleString()}
-                  {e.location ? ` · ${e.location}` : ""}
+            {events.map((ev) => (
+              <li key={ev.id} className="rounded-xl border bg-white p-4 shadow-sm">
+                <p className="font-semibold text-slate-900">{ev.title}</p>
+                <p className="text-sm text-slate-500">
+                  {new Date(ev.start_at).toLocaleString()}
+                  {ev.location ? ` · ${ev.location}` : ""}
                 </p>
-                {e.description && (
-                  <p className="mt-2 line-clamp-2 text-sm text-slate-600">{e.description}</p>
+                {ev.description && (
+                  <p className="mt-1 line-clamp-2 text-sm text-slate-600">{ev.description}</p>
                 )}
               </li>
             ))}
           </ul>
         )}
-      </section>
-
-      <section className="rounded-2xl border border-blue-100 bg-gradient-to-b from-blue-50 to-white px-6 py-10 text-center shadow-sm">
-        <h2 className="text-xl font-bold text-slate-900">Support the mission</h2>
-        <p className="mx-auto mt-2 max-w-md text-sm text-slate-600">
-          Your generosity fuels worship, outreach, and care in our community.
-        </p>
-        <Link
-          href="/give"
-          className="mt-5 inline-block rounded-lg bg-brand-600 px-6 py-3 text-sm font-semibold text-white hover:bg-brand-700"
-        >
-          Give online
-        </Link>
       </section>
     </div>
   );
