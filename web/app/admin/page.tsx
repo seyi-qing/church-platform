@@ -4,6 +4,22 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { apiFetch } from "@/lib/api";
 
+type Stats = {
+  members: number;
+  media: number;
+  events: number;
+  donations: number;
+};
+
+const ACTIONS = [
+  { href: "/admin/media", label: "Add media", desc: "Sermon or playlist item" },
+  { href: "/admin/events", label: "Add event", desc: "Service or gathering" },
+  { href: "/admin/livestream", label: "Livestream", desc: "YouTube live URL" },
+  { href: "/admin/members", label: "Members", desc: "Accounts & roles" },
+  { href: "/admin/announcements", label: "Announce", desc: "Church-wide message" },
+  { href: "/admin/giving", label: "Giving", desc: "Donations & funds" },
+];
+
 function StatCard({
   label,
   value,
@@ -16,35 +32,28 @@ function StatCard({
   return (
     <Link
       href={href}
-      className="rounded-xl border bg-white p-5 shadow-sm transition hover:shadow-md"
+      className="block rounded-xl border bg-white p-4 shadow-sm hover:border-blue-200"
     >
-      <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{label}</p>
-      <p className="mt-2 text-2xl font-bold text-slate-900">{value}</p>
+      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{label}</p>
+      <p className="mt-1 text-2xl font-bold tabular-nums text-slate-900">{value}</p>
     </Link>
   );
 }
 
-const ACTIONS = [
-  { href: "/admin/members", label: "Members", desc: "Accounts & roles" },
-  { href: "/admin/media", label: "Media", desc: "Sermons & playlists" },
-  { href: "/admin/events", label: "Events", desc: "Calendar" },
-  { href: "/admin/livestream", label: "Livestream", desc: "YouTube go-live" },
-  { href: "/admin/giving", label: "Giving", desc: "Donations" },
-  { href: "/admin/ai", label: "AI Tools", desc: "Pastoral helpers" },
-];
-
-export default function AdminDashboard() {
-  const [stats, setStats] = useState<{
-    members: number;
-    media: number;
-    events: number;
-    donations: number;
-  } | null>(null);
+export default function AdminDashboardPage() {
+  const [stats, setStats] = useState<Stats | null>(null);
   const [error, setError] = useState("");
+  const [churchName, setChurchName] = useState("");
 
   useEffect(() => {
     async function load() {
       try {
+        try {
+          const org = await apiFetch<{ name?: string }>("/tenants/current");
+          if (org?.name) setChurchName(org.name);
+        } catch {
+          /* ignore */
+        }
         const [profiles, items, events, donations] = await Promise.all([
           apiFetch<unknown[]>("/members/users").catch(() => []),
           apiFetch<unknown[]>("/media/items?published_only=false&limit=100").catch(() => []),
@@ -68,7 +77,15 @@ export default function AdminDashboard() {
     <div className="space-y-8">
       <div>
         <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
-        <p className="mt-1 text-slate-500">Members · media · events · livestream · giving</p>
+        <p className="mt-1 text-slate-500">
+          {churchName ? (
+            <>
+              <span className="font-semibold text-slate-800">{churchName}</span>
+              {" · "}
+            </>
+          ) : null}
+          Members · media · events · livestream · giving
+        </p>
       </div>
 
       {error && (
@@ -99,7 +116,7 @@ export default function AdminDashboard() {
       </div>
 
       <div className="rounded-xl border border-blue-100 bg-blue-50 p-4 text-sm text-blue-900">
-        <p className="font-semibold">Today’s workflow</p>
+        <p className="font-semibold">Today's workflow</p>
         <ol className="mt-2 list-decimal space-y-1 pl-5">
           <li>Media → add sermon with a YouTube URL</li>
           <li>Events → add or check Sunday service</li>
