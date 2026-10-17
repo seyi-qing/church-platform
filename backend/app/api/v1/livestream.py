@@ -4,7 +4,8 @@ from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy import select
 
-from app.api.deps import DbSession, LeaderUser
+from app.api.deps import DbSession, LeaderUser, OptionalUser
+from app.services.tenant import resolve_org_id
 from app.models.livestream import LivestreamSession
 from app.models.notification import PushDevice, NotificationLog
 from app.schemas.livestream import LivestreamCreate, LivestreamOut, LivestreamUpdate
@@ -76,13 +77,14 @@ async def _send_live_push(
 
 
 @router.post("/sessions", response_model=LivestreamOut, status_code=status.HTTP_201_CREATED)
-async def create_session(payload: LivestreamCreate, db: DbSession, _: LeaderUser):
+async def create_session(payload: LivestreamCreate, db: DbSession, current_user: LeaderUser):
     mux_data = None
     try:
         mux_data = await mux_service.create_live_stream(title=payload.title)
     except Exception:
         mux_data = None
 
+    oid = await resolve_org_id(db, current_user)
     session = LivestreamSession(
         title=payload.title,
         description=payload.description,
@@ -94,6 +96,7 @@ async def create_session(payload: LivestreamCreate, db: DbSession, _: LeaderUser
         mux_playback_id=mux_data["playback_id"] if mux_data else None,
         stream_key=mux_data["stream_key"] if mux_data else None,
         playback_url=(mux_data["playback_url"] if mux_data else payload.youtube_url),
+        organization_id=oid,
     )
     db.add(session)
     await db.flush()
@@ -102,8 +105,13 @@ async def create_session(payload: LivestreamCreate, db: DbSession, _: LeaderUser
 
 
 @router.get("/sessions", response_model=list[LivestreamOut])
-async def list_sessions(db: DbSession, status_filter: str | None = None):
-    query = select(LivestreamSession)
+async def list_sessions(
+    db: DbSession,
+    status_filter: str | None = None,
+    current_user: OptionalUser = None,
+):
+    oid = await resolve_org_id(db, current_user)
+    query = select(LivestreamSession).where(LivestreamSession.organization_id == oid)
     if status_filter:
         query = query.where(LivestreamSession.status == status_filter)
     result = await db.execute(query.order_by(LivestreamSession.id.desc()))
@@ -111,9 +119,13 @@ async def list_sessions(db: DbSession, status_filter: str | None = None):
 
 
 @router.get("/sessions/live", response_model=LivestreamOut | None)
-async def get_current_live(db: DbSession):
+async def get_current_live(db: DbSession, current_user: OptionalUser = None):
+    oid = await resolve_org_id(db, current_user)
     result = await db.execute(
-        select(LivestreamSession).where(LivestreamSession.status == "live").limit(1)
+        select(LivestreamSession)
+        .where(LivestreamSession.status == "live")
+        .where(LivestreamSession.organization_id == oid)
+        .limit(1)
     )
     return result.scalar_one_or_none()
 
@@ -209,7 +221,6 @@ async def start_session(session_id: int, db: DbSession, current_user: LeaderUser
 
 @router.post("/sessions/{session_id}/notify", response_model=NotifyResponse)
 async def notify_live_again(session_id: int, db: DbSession, current_user: LeaderUser):
-    """Send 'We're live' push without changing session status (session must already be live)."""
     result = await db.execute(
         select(LivestreamSession).where(LivestreamSession.id == session_id)
     )
