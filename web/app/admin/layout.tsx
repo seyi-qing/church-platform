@@ -56,6 +56,7 @@ const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
       { href: "/admin/communications", label: "Communications", roles: ["admin", "pastor", "leader", "secretary"] },
       { href: "/admin/campuses", label: "Campuses", roles: ["admin", "pastor"] },
       { href: "/admin/pages", label: "Pages", roles: ["admin", "pastor"] },
+      { href: "/admin/settings", label: "Church settings", roles: ["admin", "pastor"] },
     ],
   },
 ];
