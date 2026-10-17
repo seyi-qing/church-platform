@@ -1,11 +1,12 @@
 from datetime import datetime
 
 from fastapi import APIRouter, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from app.api.deps import DbSession, LeaderUser
 from app.models.care import CareFollowUp, CareNote, CareRequest
+from app.services.tenant import resolve_org_id
 
 router = APIRouter(prefix="/care", tags=["pastoral care"])
 
@@ -13,7 +14,7 @@ router = APIRouter(prefix="/care", tags=["pastoral care"])
 class CareRequestCreate(BaseModel):
     member_id: int | None = None
     campus_id: int | None = None
-    requester_name: str
+    requester_name: str = Field(min_length=1, max_length=255)
     requester_email: str | None = None
     requester_phone: str | None = None
     category: str = "general"
@@ -22,6 +23,7 @@ class CareRequestCreate(BaseModel):
     details: str | None = None
     is_confidential: bool = True
     assigned_to: int | None = None
+    due_date: str | None = None
 
 
 class CareRequestUpdate(BaseModel):
@@ -30,25 +32,40 @@ class CareRequestUpdate(BaseModel):
     assigned_to: int | None = None
     summary: str | None = None
     details: str | None = None
+    is_confidential: bool | None = None
 
 
 class CareRequestOut(BaseModel):
     id: int
-    member_id: int | None
-    campus_id: int | None
+    member_id: int | None = None
+    campus_id: int | None = None
     requester_name: str
+    requester_email: str | None = None
+    requester_phone: str | None = None
     category: str
     priority: str
     status: str
     summary: str
-    assigned_to: int | None
-    created_at: datetime
+    details: str | None = None
+    assigned_to: int | None = None
+    created_at: datetime | None = None
+
     model_config = {"from_attributes": True}
 
 
 @router.post("/requests", response_model=CareRequestOut, status_code=status.HTTP_201_CREATED)
 async def create_request(payload: CareRequestCreate, db: DbSession, current_user: LeaderUser):
-    req = CareRequest(**payload.model_dump(), created_by=current_user.id)
+    oid = await resolve_org_id(db, current_user)
+    data = payload.model_dump()
+    due = data.pop("due_date", None)
+    req = CareRequest(**data, created_by=current_user.id, organization_id=oid)
+    if due:
+        try:
+            from datetime import date as date_cls
+
+            req.due_date = date_cls.fromisoformat(str(due)[:10])
+        except Exception:
+            pass
     db.add(req)
     await db.flush()
     await db.refresh(req)
@@ -56,8 +73,11 @@ async def create_request(payload: CareRequestCreate, db: DbSession, current_user
 
 
 @router.get("/requests", response_model=list[CareRequestOut])
-async def list_requests(db: DbSession, _: LeaderUser, status_filter: str | None = None, limit: int = 50):
-    q = select(CareRequest)
+async def list_requests(
+    db: DbSession, current_user: LeaderUser, status_filter: str | None = None, limit: int = 50
+):
+    oid = await resolve_org_id(db, current_user)
+    q = select(CareRequest).where(CareRequest.organization_id == oid)
     if status_filter:
         q = q.where(CareRequest.status == status_filter)
     result = await db.execute(q.order_by(CareRequest.created_at.desc()).limit(limit))
@@ -65,14 +85,21 @@ async def list_requests(db: DbSession, _: LeaderUser, status_filter: str | None 
 
 
 @router.patch("/requests/{request_id}", response_model=CareRequestOut)
-async def update_request(request_id: int, payload: CareRequestUpdate, db: DbSession, _: LeaderUser):
-    result = await db.execute(select(CareRequest).where(CareRequest.id == request_id))
+async def update_request(
+    request_id: int, payload: CareRequestUpdate, db: DbSession, current_user: LeaderUser
+):
+    oid = await resolve_org_id(db, current_user)
+    result = await db.execute(
+        select(CareRequest).where(
+            CareRequest.id == request_id, CareRequest.organization_id == oid
+        )
+    )
     req = result.scalar_one_or_none()
     if not req:
-        raise HTTPException(status_code=404, detail="Not found")
+        raise HTTPException(status_code=404, detail="Care request not found")
     for k, v in payload.model_dump(exclude_unset=True).items():
         setattr(req, k, v)
-    if payload.status in ("resolved", "closed") and not req.resolved_at:
+    if payload.status == "resolved" and not req.resolved_at:
         req.resolved_at = datetime.utcnow()
     await db.flush()
     await db.refresh(req)
@@ -85,30 +112,28 @@ async def add_note(payload: dict, db: DbSession, current_user: LeaderUser):
         care_request_id=payload.get("care_request_id"),
         member_id=payload.get("member_id"),
         author_id=current_user.id,
-        note=payload["note"],
-        is_private=payload.get("is_private", True),
+        note=payload.get("note") or "",
+        is_private=bool(payload.get("is_private", True)),
     )
     db.add(note)
     await db.flush()
     return {"ok": True, "id": note.id}
 
 
-@router.get("/workflow/board")
-async def care_board(db: DbSession, _: LeaderUser, campus_id: int | None = None):
-    q = select(CareRequest)
+@router.get("/board")
+async def care_board(db: DbSession, current_user: LeaderUser, campus_id: int | None = None):
+    oid = await resolve_org_id(db, current_user)
+    q = select(CareRequest).where(CareRequest.organization_id == oid)
     if campus_id:
         q = q.where(CareRequest.campus_id == campus_id)
     result = await db.execute(q.order_by(CareRequest.created_at.desc()))
-    items = result.scalars().all()
-    board = {"open": [], "assigned": [], "in_progress": [], "resolved": [], "closed": []}
-    for item in items:
-        bucket = item.status if item.status in board else "open"
-        board[bucket].append({
-            "id": item.id,
-            "requester_name": item.requester_name,
-            "category": item.category,
-            "priority": item.priority,
-            "summary": item.summary,
-            "assigned_to": item.assigned_to,
-        })
-    return board
+    rows = result.scalars().all()
+    open_rows = [r for r in rows if r.status in ("open", "new")]
+    assigned = [r for r in rows if r.status == "assigned"]
+    resolved = [r for r in rows if r.status in ("resolved", "closed")]
+    return {
+        "open": open_rows,
+        "assigned": assigned,
+        "resolved": resolved,
+        "total": len(rows),
+    }

@@ -1,5 +1,4 @@
-"""Multi-tenant helpers: resolve org and HARD scope queries."""
-
+from contextvars import ContextVar
 from sqlalchemy import Select, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -7,6 +6,17 @@ from app.models.organization import Organization
 from app.models.user import User
 
 DEFAULT_SLUG = "grace"
+
+# Set by FastAPI middleware from X-Tenant-Slug / ?tenant=
+_request_tenant_slug: ContextVar[str | None] = ContextVar("request_tenant_slug", default=None)
+
+
+def set_request_tenant_slug(slug: str | None) -> None:
+    _request_tenant_slug.set((slug or "").strip().lower() or None)
+
+
+def get_request_tenant_slug() -> str | None:
+    return _request_tenant_slug.get()
 
 
 async def get_default_org(db: AsyncSession) -> Organization:
@@ -36,25 +46,46 @@ async def get_default_org(db: AsyncSession) -> Organization:
     return org
 
 
-async def resolve_org_id(db: AsyncSession, user: User | None) -> int:
+async def get_org_by_slug(db: AsyncSession, slug: str | None) -> Organization | None:
+    if not slug:
+        return None
+    s = slug.strip().lower()
+    if not s or s in ("www", "api", "app", "platform", "admin"):
+        return None
+    return (
+        await db.execute(select(Organization).where(Organization.slug == s))
+    ).scalar_one_or_none()
+
+
+async def resolve_org_id(
+    db: AsyncSession,
+    user: User | None,
+    *,
+    tenant_slug: str | None = None,
+) -> int:
     """Active tenant for this request.
 
-    - User with organization_id (including after Act-as) → that org
-    - Anonymous public → default Grace (until subdomain routing)
+    Priority:
+    1. Authenticated user.organization_id (Act-as / church staff)
+    2. Explicit tenant_slug arg or request ContextVar (subdomain / header)
+    3. Default Grace
     """
     if user is not None and user.organization_id is not None:
         return int(user.organization_id)
+    slug = tenant_slug or get_request_tenant_slug()
+    if slug:
+        org = await get_org_by_slug(db, slug)
+        if org and org.is_active:
+            return int(org.id)
     org = await get_default_org(db)
     return int(org.id)
 
 
 def scope_query(query: Select, column, org_id: int) -> Select:
-    """HARD isolation: only rows for this organization_id."""
     return query.where(column == org_id)
 
 
 async def backfill_org_ids(db: AsyncSession, org_id: int) -> dict[str, int]:
-    """Assign null organization_id rows to the given church (Grace once at bootstrap)."""
     tables = [
         "users",
         "media_items",
@@ -66,6 +97,8 @@ async def backfill_org_ids(db: AsyncSession, org_id: int) -> dict[str, int]:
         "livestream_sessions",
         "donations",
         "expenses",
+        "groups",
+        "care_requests",
     ]
     counts: dict[str, int] = {}
     for table in tables:
