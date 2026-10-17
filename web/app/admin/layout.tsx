@@ -114,12 +114,7 @@ export default function AdminLayout({
     }
     setUser(u);
     setReady(true);
-    try {
-      const cached = localStorage.getItem("active_tenant_name");
-      if (cached) setChurchName(cached);
-    } catch {
-      /* ignore */
-    }
+    // Prefer API (Act-as) over cache so header matches active tenant
     apiFetch<{ name?: string }>("/tenants/current")
       .then((org) => {
         if (org?.name) {
@@ -131,7 +126,14 @@ export default function AdminLayout({
           }
         }
       })
-      .catch(() => {});
+      .catch(() => {
+        try {
+          const cached = localStorage.getItem("active_tenant_name");
+          if (cached) setChurchName(cached);
+        } catch {
+          /* ignore */
+        }
+      });
   }, [pathname, router]);
 
   useEffect(() => {
@@ -338,8 +340,7 @@ export default function AdminLayout({
               role="dialog"
               aria-label="Admin menu"
             >
-              <div className="flex items-center justify-between border-b border-slate-800 p-4">
-                <span className="text-sm font-bold text-white">{churchName}</span>
+              <div className="flex items-center justify-end border-b border-slate-800 px-2 py-1">
                 <button
                   type="button"
                   aria-label="Close menu"
