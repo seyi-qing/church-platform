@@ -20,7 +20,6 @@ async def _ensure_columns() -> None:
     statements = [
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR(40)",
         "ALTER TABLE member_profiles ADD COLUMN IF NOT EXISTS phone VARCHAR(40)",
-        # Multi-tenant foundation: nullable org link (backfill later)
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS organization_id INTEGER",
     ]
     async with engine.begin() as conn:
@@ -111,26 +110,30 @@ async def _auto_seed_if_empty() -> None:
                     )
                 )
 
-            media_count = (await db.execute(select(func.count()).select_from(MediaItem))).scalar() or 0
-            if media_count == 0:
+            series = (await db.execute(select(Series).limit(1))).scalar_one_or_none()
+            if series is None:
                 series = Series(title="Welcome Series", description="Getting started")
                 db.add(series)
                 await db.flush()
+
+            media_count = (await db.execute(select(func.count()).select_from(MediaItem))).scalar() or 0
+            if media_count == 0 and series is not None:
                 db.add(
                     MediaItem(
                         title="What Is the Gospel?",
                         description="An introduction to the good news of Jesus.",
-                        speaker="Pastor",
                         media_type="sermon",
                         series_id=series.id,
+                        speaker="Pastor",
                         is_published=True,
+                        published_at=datetime.utcnow(),
                     )
                 )
 
             await db.commit()
         except Exception as e:
-            print(f"[seed] skip: {e}")
             await db.rollback()
+            print(f"[seed] skipped: {e}")
 
 
 @asynccontextmanager
@@ -141,27 +144,53 @@ async def lifespan(app: FastAPI):
     await _ensure_default_tenant()
     await _auto_seed_if_empty()
     yield
+    await engine.dispose()
 
 
-app = FastAPI(title=settings.PROJECT_NAME, lifespan=lifespan)
+app = FastAPI(
+    title=settings.PROJECT_NAME,
+    openapi_url=f"{settings.API_V1_STR}/openapi.json",
+    docs_url="/docs",
+    redoc_url="/redoc",
+    lifespan=lifespan,
+)
 
-origins = [o.strip() for o in (settings.CORS_ORIGINS or "*").split(",") if o.strip()]
+# Explicit origins + Vercel preview/production regex so CORS never blocks the web app
+_cors_origins = list(settings.BACKEND_CORS_ORIGINS or [])
+for extra in (
+    "https://church-platform-mu.vercel.app",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+):
+    if extra not in _cors_origins:
+        _cors_origins.append(extra)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins if origins != ["*"] else ["*"],
+    allow_origins=_cors_origins,
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
-app.include_router(api_router, prefix=settings.API_V1_PREFIX)
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    """Always return JSON + CORS-friendly body so the browser does not show 'Failed to fetch'."""
+    print(f"[error] {request.method} {request.url.path}: {exc!r}")
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": "Server error. If this persists after a redeploy, check Render logs."
+        },
+    )
+
+
+app.include_router(api_router, prefix=settings.API_V1_STR)
 
 
 @app.get("/health")
 async def health():
-    return {"status": "ok"}
-
-
-@app.exception_handler(Exception)
-async def unhandled(request: Request, exc: Exception):
-    return JSONResponse(status_code=500, content={"detail": str(exc)})
+    return {"status": "ok", "service": settings.PROJECT_NAME}
