@@ -5,9 +5,15 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { getAccessToken, clearAuth, getStoredUser } from "@/lib/auth";
 
-type NavItem = { href: string; label: string; roles: string[] };
+type NavItem = { href: string; label: string; roles: string[]; superOnly?: boolean };
 
 const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
+  {
+    title: "Platform",
+    items: [
+      { href: "/admin/platform", label: "Tenants & plans", roles: ["admin"], superOnly: true },
+    ],
+  },
   {
     title: "Overview",
     items: [
@@ -119,6 +125,7 @@ export default function AdminLayout({
   }
 
   function allowed(item: NavItem) {
+    if (item.superOnly) return !!user.is_superuser;
     return item.roles.includes(user.role) || user.is_superuser;
   }
 
@@ -134,6 +141,7 @@ export default function AdminLayout({
           <div className="text-sm font-bold tracking-wide text-white">Grace Church</div>
           <p className="mt-0.5 text-xs font-semibold uppercase tracking-wider text-blue-300">
             Admin · {user.role}
+            {user.is_superuser ? " · platform" : ""}
           </p>
         </div>
         <nav className="mt-2 flex-1 space-y-3 overflow-y-auto px-2 pb-4" aria-label="Admin">
@@ -214,6 +222,7 @@ export default function AdminLayout({
             <div className="text-sm font-bold">Grace Church</div>
             <div className="text-[10px] uppercase tracking-wider text-blue-300">
               Admin · {user.role}
+              {user.is_superuser ? " · platform" : ""}
             </div>
           </div>
 
