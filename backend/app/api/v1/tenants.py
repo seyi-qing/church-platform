@@ -1,9 +1,10 @@
 """Tenant / organization API — multi-tenant foundation + platform super-admin."""
 
+import json
 import re
 from datetime import datetime
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
@@ -115,7 +116,6 @@ async def current_tenant(db: DbSession, user: OptionalUser = None):
 
 @router.get("", response_model=list[OrgOut])
 async def list_tenants(db: DbSession, current_user: CurrentUser):
-    """Church admins see current; platform superusers see all tenants."""
     if current_user.is_superuser:
         rows = (
             await db.execute(select(Organization).order_by(Organization.name))
@@ -136,7 +136,6 @@ async def list_tenants(db: DbSession, current_user: CurrentUser):
 
 @router.post("", response_model=OrgOut, status_code=status.HTTP_201_CREATED)
 async def create_tenant(payload: OrgCreate, db: DbSession, current_user: CurrentUser):
-    """Platform super-admin: provision a new church tenant."""
     _require_superuser(current_user)
     slug = (payload.slug or _slugify(payload.name)).lower().strip()
     slug = re.sub(r"[^a-z0-9-]", "", slug) or "church"
@@ -168,7 +167,6 @@ async def create_tenant(payload: OrgCreate, db: DbSession, current_user: Current
 
 @router.patch("/current", response_model=OrgOut)
 async def update_current_tenant(payload: OrgUpdate, db: DbSession, current_user: AdminUser):
-    """Church admin (or Act-as) updates branding of the active organization."""
     if current_user.organization_id:
         org = (
             await db.execute(
@@ -197,7 +195,6 @@ async def update_current_tenant(payload: OrgUpdate, db: DbSession, current_user:
 
 @router.get("/by-slug/{slug}", response_model=OrgOut)
 async def tenant_by_slug(slug: str, db: DbSession):
-    """Public: resolve church by subdomain/path slug for branding + isolation."""
     from app.services.tenant import get_org_by_slug
 
     org = await get_org_by_slug(db, slug)
@@ -206,11 +203,73 @@ async def tenant_by_slug(slug: str, db: DbSession):
     return org
 
 
+@router.post("/billing/webhook")
+async def stripe_billing_webhook(request: Request, db: DbSession):
+    """Stripe subscription lifecycle → organization.subscription_status / plan."""
+    from app.core.config import get_settings
+
+    settings = get_settings()
+    payload = await request.body()
+    sig = request.headers.get("stripe-signature")
+
+    if getattr(settings, "STRIPE_WEBHOOK_SECRET", None):
+        import stripe
+
+        try:
+            event = stripe.Webhook.construct_event(
+                payload, sig, settings.STRIPE_WEBHOOK_SECRET
+            )
+            etype = event["type"]
+            data = event["data"]["object"]
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Webhook signature error: {e}") from e
+    else:
+        try:
+            event = json.loads(payload.decode("utf-8"))
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid webhook body")
+        etype = event.get("type")
+        data = (event.get("data") or {}).get("object") or {}
+
+    meta = data.get("metadata") or {}
+    org_id = meta.get("organization_id")
+    plan = meta.get("plan")
+
+    if etype in (
+        "checkout.session.completed",
+        "customer.subscription.updated",
+        "customer.subscription.created",
+    ):
+        if org_id:
+            org = (
+                await db.execute(select(Organization).where(Organization.id == int(org_id)))
+            ).scalar_one_or_none()
+            if org:
+                org.subscription_status = "active"
+                if plan and plan in PLANS:
+                    org.plan = plan
+                sub_id = data.get("subscription") or data.get("id")
+                if sub_id and str(sub_id).startswith("sub_"):
+                    org.stripe_subscription_id = str(sub_id)
+                cust = data.get("customer")
+                if cust:
+                    org.stripe_customer_id = str(cust)
+                await db.flush()
+    elif etype == "customer.subscription.deleted" and org_id:
+        org = (
+            await db.execute(select(Organization).where(Organization.id == int(org_id)))
+        ).scalar_one_or_none()
+        if org:
+            org.subscription_status = "canceled"
+            await db.flush()
+
+    return {"ok": True}
+
+
 @router.post("/{org_id}/billing/checkout")
 async def tenant_billing_checkout(
     org_id: int, db: DbSession, current_user: CurrentUser, plan: str = "growth"
 ):
-    """Platform super-admin: start Stripe Checkout for a tenant plan (or demo mode)."""
     _require_superuser(current_user)
     from app.core.config import get_settings
 
@@ -304,7 +363,6 @@ async def get_tenant(org_id: int, db: DbSession, current_user: CurrentUser):
 async def update_tenant(
     org_id: int, payload: OrgUpdate, db: DbSession, current_user: CurrentUser
 ):
-    """Platform super-admin: edit any tenant including plan and active flag."""
     _require_superuser(current_user)
     org = (
         await db.execute(select(Organization).where(Organization.id == org_id))
@@ -323,7 +381,6 @@ async def update_tenant(
 
 @router.post("/{org_id}/act-as", response_model=OrgOut)
 async def act_as_tenant(org_id: int, db: DbSession, current_user: CurrentUser):
-    """Platform super-admin: attach session to a tenant (sets user.organization_id)."""
     _require_superuser(current_user)
     org = (
         await db.execute(select(Organization).where(Organization.id == org_id))
@@ -341,7 +398,6 @@ async def act_as_tenant(org_id: int, db: DbSession, current_user: CurrentUser):
 
 @router.post("/clear-act-as")
 async def clear_act_as(db: DbSession, current_user: CurrentUser):
-    """Platform super-admin: leave church context (organization_id = null)."""
     _require_superuser(current_user)
     current_user.organization_id = None
     await db.flush()
