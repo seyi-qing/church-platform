@@ -64,7 +64,7 @@ async def ensure_default_tenant() -> None:
 
 
 async def ensure_platform_accounts() -> None:
-    """Upsert platform + Grace admins. Keeps all other users."""
+    """Upsert platform + Grace + Seyi admins. Keeps all other users."""
     from sqlalchemy import select
     from app.core.security import get_password_hash
     from app.models.organization import Organization
@@ -84,6 +84,32 @@ async def ensure_platform_accounts() -> None:
             counts = await backfill_org_ids(db, grace.id)
             print(f"[tenant] backfill: {counts}")
 
+            seyi = (
+                await db.execute(select(Organization).where(Organization.slug == "seyi"))
+            ).scalar_one_or_none()
+            if not seyi:
+                seyi = (
+                    await db.execute(
+                        select(Organization).where(Organization.name.ilike("%seyi%"))
+                    )
+                ).scalar_one_or_none()
+            if not seyi:
+                seyi = Organization(
+                    name="Seyi Church",
+                    slug="seyi",
+                    tagline="Faith · Community · Hope",
+                    primary_color="#7c3aed",
+                    timezone="Africa/Kampala",
+                    service_times="Sundays · 9:00 AM",
+                    address="Kampala, Uganda",
+                    plan="starter",
+                    is_active=True,
+                    subscription_status="trial",
+                )
+                db.add(seyi)
+                await db.flush()
+                print("[tenant] seeded organization: seyi")
+
             specs = [
                 {
                     "email": "admin@churchplatform.com",
@@ -98,6 +124,13 @@ async def ensure_platform_accounts() -> None:
                     "role": "admin",
                     "is_superuser": False,
                     "organization_id": grace.id,
+                },
+                {
+                    "email": "admin@seyichurch.org",
+                    "full_name": "Seyi Church Admin",
+                    "role": "admin",
+                    "is_superuser": False,
+                    "organization_id": seyi.id if seyi else None,
                 },
             ]
             for s in specs:
