@@ -34,8 +34,12 @@ export default function PublicVisitorTemplate({
     setIsStaff(!!(u && (isStaffRole(u.role) || u.is_superuser)));
   }, [pathname]);
 
-  // Admin app + SaaS product marketing use their own chrome
-  if (pathname.startsWith("/admin") || pathname.startsWith("/platform")) {
+  // Admin, platform SaaS console, and product marketing use their own chrome
+  if (
+    pathname.startsWith("/admin") ||
+    pathname.startsWith("/platform") ||
+    pathname.startsWith("/product")
+  ) {
     return <>{children}</>;
   }
 
