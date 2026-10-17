@@ -93,7 +93,7 @@ async def ensure_default_org(db) -> Organization:
 
 @router.get("/current", response_model=OrgOut)
 async def current_tenant(db: DbSession, user: OptionalUser = None):
-    """Active tenant: Act-as / staff org when logged in, else Grace default for public."""
+    """Active tenant: Act-as / staff org, else X-Tenant-Slug, else Grace."""
     if user is not None and user.organization_id is not None:
         org = (
             await db.execute(
@@ -101,6 +101,13 @@ async def current_tenant(db: DbSession, user: OptionalUser = None):
             )
         ).scalar_one_or_none()
         if org:
+            return org
+    from app.services.tenant import get_request_tenant_slug, get_org_by_slug
+
+    slug = get_request_tenant_slug()
+    if slug:
+        org = await get_org_by_slug(db, slug)
+        if org and org.is_active:
             return org
     org = await ensure_default_org(db)
     return org
@@ -186,6 +193,100 @@ async def update_current_tenant(payload: OrgUpdate, db: DbSession, current_user:
     await db.flush()
     await db.refresh(org)
     return org
+
+
+@router.get("/by-slug/{slug}", response_model=OrgOut)
+async def tenant_by_slug(slug: str, db: DbSession):
+    """Public: resolve church by subdomain/path slug for branding + isolation."""
+    from app.services.tenant import get_org_by_slug
+
+    org = await get_org_by_slug(db, slug)
+    if not org or not org.is_active:
+        raise HTTPException(status_code=404, detail="Church not found")
+    return org
+
+
+@router.post("/{org_id}/billing/checkout")
+async def tenant_billing_checkout(
+    org_id: int, db: DbSession, current_user: CurrentUser, plan: str = "growth"
+):
+    """Platform super-admin: start Stripe Checkout for a tenant plan (or demo mode)."""
+    _require_superuser(current_user)
+    from app.core.config import get_settings
+
+    settings = get_settings()
+    org = (
+        await db.execute(select(Organization).where(Organization.id == org_id))
+    ).scalar_one_or_none()
+    if not org:
+        raise HTTPException(status_code=404, detail="Organization not found")
+    if plan not in PLANS:
+        plan = "growth"
+
+    if not getattr(settings, "STRIPE_SECRET_KEY", None):
+        org.plan = plan
+        org.subscription_status = "active"
+        org.stripe_subscription_id = f"demo_sub_{org.id}"
+        await db.flush()
+        await db.refresh(org)
+        return {
+            "demo": True,
+            "url": None,
+            "message": f"{org.name} set to plan={plan} (demo — set STRIPE_SECRET_KEY for live billing).",
+            "organization": {
+                "id": org.id,
+                "name": org.name,
+                "plan": org.plan,
+                "subscription_status": org.subscription_status,
+            },
+        }
+
+    import stripe
+
+    stripe.api_key = settings.STRIPE_SECRET_KEY
+    price_map = {
+        "starter": getattr(settings, "STRIPE_PRICE_STARTER", None),
+        "growth": getattr(settings, "STRIPE_PRICE_GROWTH", None),
+        "pro": getattr(settings, "STRIPE_PRICE_PRO", None),
+    }
+    try:
+        if not org.stripe_customer_id:
+            customer = stripe.Customer.create(
+                name=org.name,
+                metadata={"organization_id": str(org.id), "slug": org.slug},
+            )
+            org.stripe_customer_id = customer.id
+            await db.flush()
+
+        price_id = price_map.get(plan)
+        if price_id:
+            line_items = [{"price": price_id, "quantity": 1}]
+        else:
+            amounts = {"starter": 2900, "growth": 7900, "pro": 14900}
+            price = stripe.Price.create(
+                unit_amount=amounts.get(plan, 7900),
+                currency="usd",
+                recurring={"interval": "month"},
+                product_data={"name": f"Church Platform — {plan.title()}"},
+            )
+            line_items = [{"price": price.id, "quantity": 1}]
+
+        origins = settings.BACKEND_CORS_ORIGINS or ["http://localhost:3000"]
+        origin = next((o for o in origins if "vercel" in o), origins[0])
+        session = stripe.checkout.Session.create(
+            mode="subscription",
+            customer=org.stripe_customer_id,
+            line_items=line_items,
+            success_url=origin.rstrip("/") + "/platform?billing=success",
+            cancel_url=origin.rstrip("/") + "/platform?billing=cancel",
+            metadata={"organization_id": str(org.id), "plan": plan},
+        )
+        org.plan = plan
+        org.subscription_status = "checkout"
+        await db.flush()
+        return {"demo": False, "url": session.url, "session_id": session.id}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 @router.get("/{org_id}", response_model=OrgOut)
